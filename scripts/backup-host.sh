@@ -14,7 +14,7 @@ case "$NEXUS_REPO_DIR" in /*) ;; *) echo 'NEXUS_REPO_DIR must be absolute' >&2; 
 cd "$NEXUS_REPO_DIR"
 
 if [ "$operation" = daily ]; then
-    operation=diff
-    if [ "$(TZ=Asia/Tokyo date +%u)" = 7 ]; then operation=full; fi
+    operation='diff'
+    if [ "$(TZ=Asia/Tokyo date +%u)" = 7 ]; then operation='full'; fi
 fi
 exec docker compose exec -T --user postgres postgres nexus-backup "$operation"
