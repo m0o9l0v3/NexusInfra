@@ -40,7 +40,7 @@ DBの内容で手順を分岐する。
 - 現行17にNexusの表や実データがある: custom dumpを18の別DBに`pg_restore --exit-on-error`で復元。`pg_dumpall`のglobalsを確認し、18の初期role作成スクリプトと衝突しないrole/owner/権限マッピングを先にレビューする。履歴のない既存表や未知のmigrationがあれば停止し、手作業で履歴を偽装しない。
 - Nexusの実データがなく、新規DBとして扱えることを一覧・件数で証明できる: 18の空DBへレビュー済みMobile/Studio migrationを適用する。17のバックアップと隔離復元gateは省略しない。
 
-Mobileの`public` schema migration履歴とStudioの`studio` schema migration履歴は別管理。Studio専用のmigration/runtime roleと権限SQLは現在未完成なので、追加MRの検証が済むまでAPIを起動しない。SQL全文をレビューし、移行専用roleで一度だけ適用する。通常起動やCI deployでmigration/seedしない。
+Mobileの`public` schema migration履歴とStudioの`studio` schema migration履歴は別管理。Studio専用のmigration/runtime roleと権限SQLは[nexusstudio !13](https://gitlab.com/11h27m/nexusstudio/-/merge_requests/13)で別途レビュー中。マージと隔離DBでの移行SQL・権限検証が済むまでAPIを起動しない。SQL全文をレビューし、移行専用roleで一度だけ適用する。通常起動やCI deployでmigration/seedしない。
 
 データ件数と代表行、MapDatasetのpayload/checksum、両履歴、runtime roleの拒否/許可、Admin/Public/Studio API、healthcheck、DB再起動後の永続化を確認する。結果と時間・ピークRAM/diskを記録する。
 
@@ -55,7 +55,7 @@ Mobileの`public` schema migration履歴とStudioの`studio` schema migration履
 - [ ] 現行17のDB/role/書込元/データの棚卸しが完了
 - [ ] 17のVPS外暗号化コピーと別volumeへの復元が成功
 - [ ] 18の別volumeで論理移行、全migration、Studio専用role・権限が成功
-- [ ] Admin APIの`/health`と実イメージhealthcheckが成功
+- [ ] Admin APIの[nexus-mobile !24](https://gitlab.com/11h27m/nexus-mobile/-/merge_requests/24)の`/health`と実イメージhealthcheckが成功
 - [ ] 18のpgBackRestからMacコピーし、さらに別volumeへ復元成功
 - [ ] disk/RAMと停止時間を実測し、旧17への戻し条件を文書化
 - [ ] image digest、secrets contract、DNS、80/443、移行SQLを人間が承認

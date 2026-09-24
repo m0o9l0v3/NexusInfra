@@ -8,7 +8,7 @@
 ## 別MRが必要な項目
 
 1. `nexus-mobile`: 両APIとDB派生イメージのbuild/registry pushはMR !22で実装済み。ただしadmin-apiの`/app/healthcheck`が呼ぶ`/health` routeは未実装。別MR !24で修正中で、CIと実イメージ起動の両方で確認する。本番DB移行はレビュー済みSQLと専用roleで実施し、通常起動では行わない。
-2. `nexusstudio`: Studio API/Web本番イメージとsecret file読込はMR !6で実装済み。Studio専用migration/runtime role、権限SQL、隔離DBでのmigration適用は未完成で、別MRが必要。
+2. `nexusstudio`: Studio API/Web本番イメージとsecret file読込はMR !6で実装済み。Studio専用migration/runtime roleと権限SQLはMR !13でレビュー中。隔離DBでの全migrationと実データ確認は未完了。
 3. 旧admin-apiは外部公開しない。Caddyには`/admin/*`の経路を置かず、内部ネットワークに限る。利用機能・運用経路は本番適用前に再確認する。
 4. 現行VPSのPostgreSQL 17から18への移行は[専用gate](transition-postgres-17-to-18.md)に従う。現行volumeを18のComposeへ直接接続しない。
 
