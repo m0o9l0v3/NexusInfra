@@ -1,5 +1,7 @@
 # DB migrationのレビューと手動適用条件
 
+現行17のDBを18へ移す手順は[17→18の移行gate](transition-postgres-17-to-18.md)を先行させる。元volumeに18用のmigrationを直接実行しない。
+
 `nexus-mobile` の移行SQLは `tools/database/Nexus.Database.csproj` の `script` コマンドでCI成果物として生成する。StudioのEF Core移行SQLはStudio repoの対象コミットから別に生成する。どちらもアプリ起動、イメージビルド、infra CI、CI deployでは適用しない。2つの移行履歴と`public`/`studio` schemaの所有者・権限を混同しない。
 
 適用前に担当者がSQL全文、対象DB・schema・移行ID、ロック時間と既存データへの影響、前後のアプリ互換性をレビューする。同じPostgreSQLメジャー版の隔離DBで、同じSQLを適用し、再実行時の挙動とAPIを確認する。既存DBを新規DBとして扱う移行は拒否する。

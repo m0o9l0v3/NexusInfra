@@ -2,6 +2,8 @@
 
 ## 適用前の事実確認
 
+現行VPSはPostgreSQL 17で、次期Composeは18用である。まず[17→18の移行gate](transition-postgres-17-to-18.md)を満たす。現行17のvolumeを本ComposeのDB volumeに指定して起動しない。
+
 VPSへ人間が接続し、`docker ps`、`docker inspect`、`docker volume ls`、DBのメジャー版・データ配置・既存データ・現行Compose・バックアップ状態を記録する。この文書のテンプレートを既存volumeへ直結する前に、`nexus-mobile`の本番DB MRとの差分をレビューする。特にpgBackRest組み込みDBイメージのdigest、PostgreSQL 18の`/var/lib/postgresql`、DB用と`/backup`用の**異なる**外部volume、初期ロール、secret名を照合する。既存VPSが異なる構成なら起動しない。検査結果を`.env.example`の空欄に転記せず、VPS上の私有設定だけに記録する。
 
 DNS、API/Studioドメイン、ACMEメール、イメージdigest、CORS、データベース接続先と権限を確定する。アプリの別MRをマージして本番イメージとhealthcheckを検証する。既存のデータとバックアップを独立した場所に保全し、復元試験を済ませる。起動時にDBをseedまたはmigrationしないことを確認する。

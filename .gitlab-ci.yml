@@ -10,6 +10,7 @@ shell-and-yaml:
     - shellcheck scripts/*.sh
     - python -c 'import yaml; [yaml.safe_load(open(p)) for p in ("compose.yaml", ".gitlab-ci.yml")]'
     - python scripts/validate-topology.py
+    - python tests/test_pg17_backup.py
     - python scripts/validate-secrets.py
     - sh -n scripts/*.sh
 

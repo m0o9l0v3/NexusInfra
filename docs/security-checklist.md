@@ -1,6 +1,6 @@
 # セキュリティと本番適用前チェック
 
-- [ ] GitLabの本MRをレビューし、既存`nexus-mobile` DB案とComposeを統合。VPSの実DB版・volume・データ配置・backupを人間が照合
+- [ ] [17→18の移行gate](transition-postgres-17-to-18.md)を満たす。現行`nexus_postgres_data`を18のComposeに指定しない
 - [ ] 既存VPSでSSH公開鍵認証、root SSHログイン無効、パスワード認証無効、OS更新、failed units 0を再確認
 - [ ] さくらパケットフィルターとホストで22/80/443のみ許可。5432、API、Studio、Docker daemon/APIは非公開
 - [ ] Docker socketをコンテナへ渡さず、docker groupへの所属を最小限にする

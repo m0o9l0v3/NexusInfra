@@ -2,6 +2,8 @@
 
 ## 主系: pgBackRest
 
+この節は**18へ切り替えた後**の運用。現行17コンテナでは`nexus-backup`を使えない。切替前の保全は[17→18の移行gate](transition-postgres-17-to-18.md)に従う。
+
 日次ジョブは本repoの`systemd/nexus-db-backup.timer`と`scripts/backup-host.sh`からinfra Compose内の`nexus-backup`を呼ぶ。`nexus-mobile`側のhost wrapper/timerは同時に登録しない。導入前に既存ジョブの有無を照合し、このMRでは登録しない。
 
 `nexus-mobile` の本番DBイメージに組み込まれた pgBackRest を主系とする。DB用外部volumeと暗号化リポジトリ用外部volumeを分けるが、どちらも同じVPS上にある。日次03:00 JSTのフル（日曜）・差分（その他）、継続WAL、フル5世代の保持は `nexus-db-backup.timer` と `nexus-backup` の契約に従う。Macへの取り出しは利用日に1日1回以上、重要な更新の前後に行い、直近3回の正常なコピーを保持する。取り出し時は `nexus-backup` のロックを使い、rawの `pgbackrest backup` / `expire` を並行実行しない。暗号鍵はMacコピーとは別保管する。
