@@ -1,5 +1,13 @@
 # nexus-infra
 
+Nexus の単一VPS向け構成案。**このリポジトリを取得しただけでは本番へ適用しない。** 本番VPSには未接続で、既存PostgreSQLのイメージ・メジャー版・volume名・データ配置は未照合。既存volumeへの接続、DBの移行、DNS、ファイアウォール、初回起動には人間のレビューが必要。
+
+構成: Caddy → public-api、Studio Web、Studio API、admin-api。PostgreSQLはAPIだけが使う。iOSアプリはVPSから配布しない。 `compose.yaml` はアプリイメージのdigest、ドメイン、既存DBの情報が確定した後に使う本番専用テンプレート。開発用Composeは各アプリrepoが所有する。
+
+手順: [構成](docs/architecture.md) / [導入](docs/deployment.md) / [バックアップと復元](docs/backup-restore.md) / [災害復旧](docs/disaster-recovery.md) / [セキュリティと適用前確認](docs/security-checklist.md) / [調査と引継ぎ](docs/repository-boundaries.md)。
+
+`nexus-mobile` の `codex/production-db-foundation` にあるpgBackRest構成は、2026-09-24時点で未統合の別設計。物理バックアップ、暗号化、Macコピー、PITRを持つ。ここにある `pg_dump` は追加の論理バックアップ案であり、その仕組みを代替しない。二重スケジュールの容量・負荷と責務を本番適用前に決定する。
+
 Nexus 本番VPSの構成・運用手順（適用は承認制）
 
 ## Getting started

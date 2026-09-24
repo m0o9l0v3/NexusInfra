@@ -1,0 +1,10 @@
+[Unit]
+Description=Nexus PostgreSQL logical backup schedule
+
+[Timer]
+OnCalendar=*-*-* 05:30:00 Asia/Tokyo
+Persistent=true
+Unit=nexus-pgdump.service
+
+[Install]
+WantedBy=timers.target

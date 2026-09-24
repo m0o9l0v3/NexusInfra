@@ -1,0 +1,121 @@
+name: nexus
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?pin the reviewed existing PostgreSQL image digest}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nexus_admin
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes:
+      - database:/var/lib/postgresql
+    networks: [db]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d nexus_admin"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    logging: &logs
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  public-api:
+    image: ${PUBLIC_API_IMAGE:?pin a reviewed image digest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DatabaseProvider: postgresql
+      ConnectionStrings__PublicApiReadOnlyFile: /run/secrets/public_connection
+      AuditLog__HashKeyFile: /run/secrets/audit_key
+      Cors__AllowedOrigins__0: https://${API_DOMAIN:?set the reviewed API domain}
+    secrets: [public_connection, audit_key]
+    networks: [db, edge]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck: &app_health
+      test: [CMD, /app/healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *logs
+  admin-api:
+    image: ${ADMIN_API_IMAGE:?pin a reviewed image digest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DatabaseProvider: postgresql
+      ConnectionStrings__AdminDatabaseFile: /run/secrets/admin_connection
+      AdminAuth__PasswordFile: /run/secrets/admin_login
+      AdminAuth__SigningKeyFile: /run/secrets/signing_key
+      AuditLog__HashKeyFile: /run/secrets/audit_key
+      OneTimeCode__HashKeyFile: /run/secrets/one_time_key
+      QrIssue__HashKeyFile: /run/secrets/qr_key
+      Cors__Origins__0: https://${STUDIO_DOMAIN:?set the reviewed Studio domain}
+    secrets: [admin_connection, admin_login, signing_key, audit_key, one_time_key, qr_key]
+    networks: [db, edge]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck: *app_health
+    logging: *logs
+  studio-api:
+    image: ${STUDIO_API_IMAGE:?pin a reviewed image digest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__StudioDatabaseFile: /run/secrets/studio_connection
+    secrets: [studio_connection]
+    networks: [db, edge]
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck: *app_health
+    logging: *logs
+  studio-web:
+    image: ${STUDIO_WEB_IMAGE:?pin a reviewed static-web image digest}
+    restart: unless-stopped
+    networks: [edge]
+    healthcheck: *app_health
+    logging: *logs
+  caddy:
+    image: ${CADDY_IMAGE:?pin a reviewed Caddy image digest}
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set the reviewed API domain}
+      STUDIO_DOMAIN: ${STUDIO_DOMAIN:?set the reviewed Studio domain}
+      ACME_EMAIL: ${ACME_EMAIL:?set the reviewed ACME account email}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge, public]
+    depends_on:
+      public-api: {condition: service_healthy}
+      admin-api: {condition: service_healthy}
+      studio-api: {condition: service_healthy}
+      studio-web: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, caddy, validate, --config, /etc/caddy/Caddyfile]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    logging: *logs
+networks:
+  db: {internal: true}
+  edge: {internal: true}
+  public: {}
+volumes:
+  database:
+    external: true
+    name: ${POSTGRES_VOLUME_NAME:?identify the existing volume before any use}
+  caddy_data: {}
+  caddy_config: {}
+secrets:
+  postgres_password: {file: "${NEXUS_SECRET_DIR:?private directory}/postgres_password"}
+  public_connection: {file: "${NEXUS_SECRET_DIR}/public_connection"}
+  admin_connection: {file: "${NEXUS_SECRET_DIR}/admin_connection"}
+  studio_connection: {file: "${NEXUS_SECRET_DIR}/studio_connection"}
+  admin_login: {file: "${NEXUS_SECRET_DIR}/admin_login"}
+  signing_key: {file: "${NEXUS_SECRET_DIR}/signing_key"}
+  audit_key: {file: "${NEXUS_SECRET_DIR}/audit_key"}
+  one_time_key: {file: "${NEXUS_SECRET_DIR}/one_time_key"}
+  qr_key: {file: "${NEXUS_SECRET_DIR}/qr_key"}
