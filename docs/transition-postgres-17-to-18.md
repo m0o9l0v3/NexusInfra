@@ -16,7 +16,20 @@
 
 生成物には表データやrole情報が含まれる。Git、MR、CI成果物、会話へ載せない。SHA-256照合後、承認した暗号化方式で既存MacなどVPS外へコピーする。暗号鍵とコピーを別管理し、コピー先の保存完了時刻・サイズ・ハッシュを記録する。**ファイルを作っただけでは合格ではない。**
 
-VPS外コピーから、元と同じ17系の隔離コンテナ・新規空volumeへ戻す。外部ポートは開けない。`globals.sql`は既存roleとの衝突と認証情報欠落をレビューし、盲目的に実行しない。DBごとにschema、件数、代表レコード、拡張、所有者・権限を照合する。Nexus以外のDBがあればそれらも復元対象に含める。元volumeの識別子と内容が変わっていないことを記録する。復元失敗時は切替計画へ進まない。
+VPS外コピーから、元と同じ17系の隔離コンテナ・新規空volumeへ戻す。外部ポートは開けない。`compose.pg17-restore.yml`はそのための限定Composeで、現行volume名を含まず、外部volumeが事前に存在しなければ起動しない。人間が**Mac等の隔離環境で**新しいvolume名・専用プロジェクト名・検証済み17イメージdigest・別保管の初期パスワードファイルを設定し、volumeが空であることを確認してから実行する。例（値は現状調査後に確定し、秘密値をシェル履歴へ書かない）:
+
+```sh
+# 隔離環境のみ。PG17_RESTORE_* と PG17_DB_NAME は私有設定から読み込む。
+test "$PG17_RESTORE_VOLUME" != nexus_postgres_data
+docker compose -f compose.pg17-restore.yml config --quiet
+docker compose -f compose.pg17-restore.yml up -d --wait
+(cd "$PG17_BACKUP_COPY_DIR" && sha256sum -c SHA256SUMS)
+docker compose -f compose.pg17-restore.yml exec -T postgres \
+  pg_restore -U postgres -d "$PG17_DB_NAME" --no-owner --no-acl --exit-on-error \
+  < "$PG17_BACKUP_COPY_DIR/nexus.dump"
+```
+
+Macに`sha256sum`がなければ`shasum -a 256 -c SHA256SUMS`を使う。復元は**自動削除・切替をしない**。事前にvolumeが空でない場合は停止し、新規volumeを使う。`globals.sql`は既存roleとの衝突と認証情報欠落をレビューし、盲目的に実行しない。DBごとにschema、件数、代表レコード、拡張、所有者・権限を照合する。Nexus以外のDBがあればそれらも復元対象に含める。元volumeの識別子と内容が変わっていないことを記録する。復元失敗時は切替計画へ進まない。
 
 ## Phase 2: 18の隔離リハーサル
 

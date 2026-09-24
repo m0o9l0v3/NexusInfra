@@ -11,6 +11,7 @@ shell-and-yaml:
     - python -c 'import yaml; [yaml.safe_load(open(p)) for p in ("compose.yaml", ".gitlab-ci.yml")]'
     - python scripts/validate-topology.py
     - python tests/test_pg17_backup.py
+    - python scripts/validate-pg17-restore.py
     - python scripts/validate-secrets.py
     - sh -n scripts/*.sh
 
@@ -25,6 +26,8 @@ compose-config:
     - export NEXUS_DB_VOLUME=reviewed-db-volume NEXUS_BACKUP_VOLUME=reviewed-backup-volume NEXUS_SECRET_DIR=/private/secrets NEXUS_REPO_DIR=/private/nexus API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
     - python3 scripts/validate-release.py
     - docker compose config --quiet
+    - export PG17_RESTORE_PROJECT=nexus-pg17-restore-ci PG17_RESTORE_IMAGE="example/postgres17@sha256:$REVIEW_DIGEST" PG17_DB_NAME=nexus_admin PG17_RESTORE_VOLUME=disposable-ci-volume PG17_RESTORE_PASSWORD_FILE=/private/restore-password
+    - docker compose -f compose.pg17-restore.yml config --quiet
 
 caddy-validate:
   stage: validate
