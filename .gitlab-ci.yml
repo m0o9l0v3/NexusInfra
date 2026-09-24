@@ -10,13 +10,19 @@ shell-and-yaml:
     - shellcheck scripts/*.sh
     - python -c 'import yaml; [yaml.safe_load(open(p)) for p in ("compose.yaml", ".gitlab-ci.yml")]'
     - python scripts/validate-topology.py
+    - python scripts/validate-secrets.py
+    - sh -n scripts/*.sh
 
 compose-config:
   stage: validate
   image: docker:27
+  before_script:
+    - apk add --no-cache python3
   script:
-    - export POSTGRES_IMAGE=postgres:18.6-trixie PUBLIC_API_IMAGE=example/public@sha256:0000 ADMIN_API_IMAGE=example/admin@sha256:0000 STUDIO_API_IMAGE=example/studio-api@sha256:0000 STUDIO_WEB_IMAGE=example/studio-web@sha256:0000 CADDY_IMAGE=caddy:2
-    - export POSTGRES_VOLUME_NAME=reviewed-volume NEXUS_SECRET_DIR=/private/secrets API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
+    - export REVIEW_DIGEST=$(printf '%064d' 0)
+    - export NEXUS_POSTGRES_IMAGE="example/postgres@sha256:$REVIEW_DIGEST" PUBLIC_API_IMAGE="example/public@sha256:$REVIEW_DIGEST" ADMIN_API_IMAGE="example/admin@sha256:$REVIEW_DIGEST" STUDIO_API_IMAGE="example/studio-api@sha256:$REVIEW_DIGEST" STUDIO_WEB_IMAGE="example/studio-web@sha256:$REVIEW_DIGEST" CADDY_IMAGE="example/caddy@sha256:$REVIEW_DIGEST"
+    - export NEXUS_DB_VOLUME=reviewed-db-volume NEXUS_BACKUP_VOLUME=reviewed-backup-volume NEXUS_SECRET_DIR=/private/secrets API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
+    - python3 scripts/validate-release.py
     - docker compose config --quiet
 
 caddy-validate:

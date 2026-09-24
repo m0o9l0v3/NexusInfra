@@ -9,6 +9,6 @@
 
 1. `nexus-mobile`: public/admin APIの本番イメージに`/app/healthcheck`を追加し、`/health`をlocalhostで照合する。ビルドとregistry pushのCI、SHAタグとdigest記録を追加する。既存の本番DBブランチの構成と公開APIの権限分離を先に統合・照合する。マイグレーションは専用のレビュー済みSQLを人間が承認して実行し、通常起動やインフラCIでは行わない。
 2. `nexusstudio`: studio-apiの本番Dockerfileとhealthcheck、`ConnectionStrings__StudioDatabaseFile`の秘密ファイル読み込み、studio-webの静的配信用本番Dockerfileとhealthcheckを追加。マイグレーション・管理者作成は手動の別手順。静的アセットはWebイメージ内に固定し、同一オリジンの`/api/*`をCaddyがstudio-apiへ中継する。Vite開発サーバーを本番へ出さない。
-3. Caddyの`/admin/*`が既存admin-apiのルートと一致するか、公開範囲が妥当かを実アプリで確認。不要なら公開前に閉じる。
+3. 旧admin-apiは外部公開しない。Caddyには`/admin/*`の経路を置かず、内部ネットワークに限る。
 
 これらのイメージはまだ存在しないため、現在のComposeは**本番起動可能とは判定しない**。インフラCIはアプリイメージのビルド、registry push、本番deployを代行しない。GitLab production environmentの保護、protected/masked/file variables、承認者、runner権限はGitLab管理画面で人間が設定する。

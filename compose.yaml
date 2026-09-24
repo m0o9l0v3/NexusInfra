@@ -1,15 +1,16 @@
-name: nexus
+name: nexus-production
 services:
   postgres:
-    image: ${POSTGRES_IMAGE:?pin the reviewed existing PostgreSQL image digest}
+    image: ${NEXUS_POSTGRES_IMAGE:?pin the reviewed pgBackRest PostgreSQL image digest}
     restart: unless-stopped
     environment:
       POSTGRES_DB: nexus_admin
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets: [postgres_password]
+    secrets: [postgres_password, admin_password, public_password, migrator_password, backup_cipher]
     volumes:
       - database:/var/lib/postgresql
+      - backup:/backup
     networks: [db]
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U postgres -d nexus_admin"]
@@ -52,7 +53,7 @@ services:
       QrIssue__HashKeyFile: /run/secrets/qr_key
       Cors__Origins__0: https://${STUDIO_DOMAIN:?set the reviewed Studio domain}
     secrets: [admin_connection, admin_login, signing_key, audit_key, one_time_key, qr_key]
-    networks: [db, edge]
+    networks: [db]
     depends_on:
       postgres: {condition: service_healthy}
     healthcheck: *app_health
@@ -73,7 +74,11 @@ services:
     image: ${STUDIO_WEB_IMAGE:?pin a reviewed static-web image digest}
     restart: unless-stopped
     networks: [edge]
-    healthcheck: *app_health
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     logging: *logs
   caddy:
     image: ${CADDY_IMAGE:?pin a reviewed Caddy image digest}
@@ -90,7 +95,6 @@ services:
     networks: [edge, public]
     depends_on:
       public-api: {condition: service_healthy}
-      admin-api: {condition: service_healthy}
       studio-api: {condition: service_healthy}
       studio-web: {condition: service_healthy}
     healthcheck:
@@ -106,11 +110,18 @@ networks:
 volumes:
   database:
     external: true
-    name: ${POSTGRES_VOLUME_NAME:?identify the existing volume before any use}
+    name: ${NEXUS_DB_VOLUME:?identify the existing DB volume before any use}
+  backup:
+    external: true
+    name: ${NEXUS_BACKUP_VOLUME:?identify the separate backup volume before any use}
   caddy_data: {}
   caddy_config: {}
 secrets:
   postgres_password: {file: "${NEXUS_SECRET_DIR:?private directory}/postgres_password"}
+  admin_password: {file: "${NEXUS_SECRET_DIR}/admin_password"}
+  public_password: {file: "${NEXUS_SECRET_DIR}/public_password"}
+  migrator_password: {file: "${NEXUS_SECRET_DIR}/migrator_password"}
+  backup_cipher: {file: "${NEXUS_SECRET_DIR}/backup_cipher"}
   public_connection: {file: "${NEXUS_SECRET_DIR}/public_connection"}
   admin_connection: {file: "${NEXUS_SECRET_DIR}/admin_connection"}
   studio_connection: {file: "${NEXUS_SECRET_DIR}/studio_connection"}

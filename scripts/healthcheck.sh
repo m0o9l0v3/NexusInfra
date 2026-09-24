@@ -18,4 +18,5 @@ curl --fail --silent --show-error "https://$STUDIO_DOMAIN/" >/dev/null
 df -h / /srv/nexus
 free -h
 uptime
-test -n "${BACKUP_DIR:-}" && find "$BACKUP_DIR" -maxdepth 1 -name '*.dump' -mtime -2 | grep -q .
+docker compose exec -T --user postgres postgres nexus-backup check
+systemctl is-active --quiet nexus-db-backup.timer

@@ -10,6 +10,8 @@ set -a
 . "$NEXUS_ENV_FILE"
 set +a
 : "${BACKUP_DIR:?Set BACKUP_DIR in the private deployment environment}"
+: "${ALLOW_LOGICAL_EXPORT:?Set ALLOW_LOGICAL_EXPORT=1 after reviewing available space}"
+test "$ALLOW_LOGICAL_EXPORT" = 1 || { echo "Logical export was not explicitly enabled" >&2; exit 2; }
 case "$BACKUP_DIR" in /*) ;; *) echo "BACKUP_DIR must be absolute" >&2; exit 2;; esac
 test -d "$BACKUP_DIR" || { echo "Create the private backup directory first" >&2; exit 2; }
 test "$(stat -c %a "$BACKUP_DIR")" = 700 || { echo "BACKUP_DIR must be mode 700" >&2; exit 2; }
