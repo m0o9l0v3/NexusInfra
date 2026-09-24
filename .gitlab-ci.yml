@@ -4,7 +4,7 @@ shell-and-yaml:
   stage: validate
   image: python:3.12-alpine
   before_script:
-    - apk add --no-cache shellcheck
+    - apk add --no-cache shellcheck git
     - pip install --no-cache-dir PyYAML==6.0.3
   script:
     - shellcheck scripts/*.sh
