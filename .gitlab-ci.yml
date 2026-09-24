@@ -12,6 +12,8 @@ shell-and-yaml:
     - python scripts/validate-topology.py
     - python tests/test_pg17_backup.py
     - python scripts/validate-pg17-restore.py
+    - python scripts/validate-pg18-rehearsal.py
+    - python tests/test_rehearsal_preflight.py
     - python scripts/validate-secrets.py
     - sh -n scripts/*.sh
 
@@ -28,6 +30,8 @@ compose-config:
     - docker compose config --quiet
     - export PG17_RESTORE_PROJECT=nexus-pg17-restore-ci PG17_RESTORE_IMAGE="example/postgres17@sha256:$REVIEW_DIGEST" PG17_DB_NAME=nexus_admin PG17_RESTORE_VOLUME=disposable-ci-volume PG17_RESTORE_PASSWORD_FILE=/private/restore-password
     - docker compose -f compose.pg17-restore.yml config --quiet
+    - export PG18_REHEARSAL_PROJECT=nexus-pg18-rehearsal-ci PG18_REHEARSAL_DB_VOLUME=disposable-ci-db-volume PG18_REHEARSAL_BACKUP_VOLUME=disposable-ci-backup-volume PG18_REHEARSAL_SECRET_DIR=/private/disposable-secrets
+    - docker compose -f compose.pg18-rehearsal.yml config --quiet
 
 caddy-validate:
   stage: validate
