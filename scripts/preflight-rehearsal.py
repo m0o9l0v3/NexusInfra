@@ -29,6 +29,8 @@ def main() -> None:
         secret = required("PG17_RESTORE_PASSWORD_FILE")
         distinct_volumes(volume)
         prefix = "nexus-pg17-restore-"
+        if not volume.startswith(prefix):
+            raise SystemExit(f"Restore volume must begin with {prefix}")
     elif mode == "pg18":
         project = required("PG18_REHEARSAL_PROJECT")
         database = required("PG18_REHEARSAL_DB_VOLUME")
@@ -37,6 +39,8 @@ def main() -> None:
         secret = required("PG18_REHEARSAL_SECRET_DIR")
         distinct_volumes(database, backup)
         prefix = "nexus-pg18-rehearsal-"
+        if not database.startswith(prefix) or not backup.startswith(prefix):
+            raise SystemExit(f"Rehearsal volumes must begin with {prefix}")
     else:
         raise SystemExit("Usage: preflight-rehearsal.py pg17|pg18")
     if not project.startswith(prefix) or len(project) == len(prefix):

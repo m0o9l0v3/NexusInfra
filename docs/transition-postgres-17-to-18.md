@@ -16,7 +16,7 @@
 
 生成物には表データやrole情報が含まれる。Git、MR、CI成果物、会話へ載せない。SHA-256照合後、承認した暗号化方式で既存MacなどVPS外へコピーする。暗号鍵とコピーを別管理し、コピー先の保存完了時刻・サイズ・ハッシュを記録する。**ファイルを作っただけでは合格ではない。**
 
-VPS外コピーから、元と同じ17系の隔離コンテナ・新規空volumeへ戻す。外部ポートは開けない。`compose.pg17-restore.yml`はそのための限定Composeで、現行volume名を含まず、外部volumeが事前に存在しなければ起動しない。人間が**Mac等の隔離環境で**新しいvolume名・専用プロジェクト名・検証済み17イメージdigest・別保管の初期パスワードファイルを設定し、volumeが空であることを確認してから実行する。例（値は現状調査後に確定し、秘密値をシェル履歴へ書かない）:
+VPS外コピーから、元と同じ17系の隔離コンテナ・新規空volumeへ戻す。外部ポートは開けない。`compose.pg17-restore.yml`はそのための限定Composeで、現行volume名を含まず、外部volumeが事前に存在しなければ起動しない。人間が**Mac等の隔離環境で**`nexus-pg17-restore-`で始まる新しいvolume名・専用プロジェクト名・検証済み17イメージdigest・別保管の初期パスワードファイルを設定し、volumeが空であることを確認してから実行する。例（値は現状調査後に確定し、秘密値をシェル履歴へ書かない）:
 
 ```sh
 # 隔離環境のみ。PG17_RESTORE_* と PG17_DB_NAME は私有設定から読み込む。
@@ -35,7 +35,7 @@ Macに`sha256sum`がなければ`shasum -a 256 -c SHA256SUMS`を使う。復元�
 
 Macにある成功コピーから、17と異なる新規空volume・別Composeプロジェクトに18系を構築する。18のDB image digest、CPUアーキテクチャ、`/var/lib/postgresql`マウントを固定する。4GB VPSで17と18を同時に走らせる場合は先にRAM/swap/diskの上限を実測し、可能ならMac等の隔離環境で先に試す。実VPSでの試験は別途承認する。
 
-隔離18環境には`compose.pg18-rehearsal.yml`を使う。DB用・バックアップ用には**異なる新規空volume**と、現行17および本番用と異なるプロジェクト名を指定し、テスト専用の秘密ファイルを用意する。外部ポートはない。値を確認して`python3 scripts/preflight-rehearsal.py pg18`と`docker compose -f compose.pg18-rehearsal.yml config --quiet`を実行し、承認された検証環境で`up -d --wait`する。元17のvolume名を指定した場合は中止。DB起動後、pgBackRest stanzaを作って状態を確認してから復元データを書き込む。17のcustom dumpを使う場合は、検証済みのMacコピーから`pg_restore -U postgres -d nexus_admin --no-owner --no-acl --exit-on-error`で**この隔離18 DBにのみ**読み込む。復元前に対象DBが空であることを確認する。以後、次の内容判定に従ってmigrationを適用する。検証volumeは自動削除しない。
+隔離18環境には`compose.pg18-rehearsal.yml`を使う。DB用・バックアップ用には`nexus-pg18-rehearsal-`で始まる**異なる新規空volume**と、現行17および本番用と異なるプロジェクト名を指定し、テスト専用の秘密ファイルを用意する。外部ポートはない。値を確認して`python3 scripts/preflight-rehearsal.py pg18`と`docker compose -f compose.pg18-rehearsal.yml config --quiet`を実行し、承認された検証環境で`up -d --wait`する。元17のvolume名を指定した場合は中止。DB起動後、pgBackRest stanzaを作って状態を確認してから復元データを書き込む。17のcustom dumpを使う場合は、検証済みのMacコピーから`pg_restore -U postgres -d nexus_admin --no-owner --no-acl --exit-on-error`で**この隔離18 DBにのみ**読み込む。復元前に対象DBが空であることを確認する。以後、次の内容判定に従ってmigrationを適用する。検証volumeは自動削除しない。
 
 DBの内容で手順を分岐する。
 
