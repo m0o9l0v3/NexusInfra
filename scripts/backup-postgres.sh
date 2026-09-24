@@ -2,7 +2,7 @@
 set -eu
 umask 077
 
-cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 : "${NEXUS_ENV_FILE:=/etc/nexus/production.env}"
 test -r "$NEXUS_ENV_FILE" || { echo "Private deployment environment file is missing" >&2; exit 2; }
 set -a
