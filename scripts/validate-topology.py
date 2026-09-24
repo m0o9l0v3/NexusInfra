@@ -12,6 +12,7 @@ assert compose["networks"]["db"]["internal"] is True
 assert compose["networks"]["edge"]["internal"] is True
 assert compose["volumes"]["database"]["external"] is True
 assert compose["volumes"]["backup"]["external"] is True
+assert "docker compose exec -T --user postgres postgres nexus-backup" in pathlib.Path("scripts/backup-host.sh").read_text()
 assert [str(v) for v in services["postgres"]["volumes"]] == ["database:/var/lib/postgresql", "backup:/backup"]
 assert "edge" not in services["admin-api"]["networks"]
 assert "/admin/*" not in pathlib.Path("Caddyfile").read_text()

@@ -2,6 +2,8 @@
 
 ## 主系: pgBackRest
 
+日次ジョブは本repoの`systemd/nexus-db-backup.timer`と`scripts/backup-host.sh`からinfra Compose内の`nexus-backup`を呼ぶ。`nexus-mobile`側のhost wrapper/timerは同時に登録しない。導入前に既存ジョブの有無を照合し、このMRでは登録しない。
+
 `nexus-mobile` の本番DBイメージに組み込まれた pgBackRest を主系とする。DB用外部volumeと暗号化リポジトリ用外部volumeを分けるが、どちらも同じVPS上にある。日次03:00 JSTのフル（日曜）・差分（その他）、継続WAL、フル5世代の保持は `nexus-db-backup.timer` と `nexus-backup` の契約に従う。Macへの取り出しは利用日に1日1回以上、重要な更新の前後に行い、直近3回の正常なコピーを保持する。取り出し時は `nexus-backup` のロックを使い、rawの `pgbackrest backup` / `expire` を並行実行しない。暗号鍵はMacコピーとは別保管する。
 
 VPS内でリポジトリとWALが残れば、保持範囲の指定時点復旧が可能。VPS全損では最後にMacへ正常コピーした時点までが復旧範囲となる。月1回と公開前に、Macコピーと別保管の鍵だけを使い、元DBと同じメジャー版・CPUアーキテクチャの**別の空volume**へ復元する。詳細は `nexus-mobile/docs/database-backup-to-mac.md` に従う。本作業では実VPSの転送・復元を行わない。

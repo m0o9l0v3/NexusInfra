@@ -21,7 +21,7 @@ compose-config:
   script:
     - export REVIEW_DIGEST=$(printf '%064d' 0)
     - export NEXUS_POSTGRES_IMAGE="example/postgres@sha256:$REVIEW_DIGEST" PUBLIC_API_IMAGE="example/public@sha256:$REVIEW_DIGEST" ADMIN_API_IMAGE="example/admin@sha256:$REVIEW_DIGEST" STUDIO_API_IMAGE="example/studio-api@sha256:$REVIEW_DIGEST" STUDIO_WEB_IMAGE="example/studio-web@sha256:$REVIEW_DIGEST" CADDY_IMAGE="example/caddy@sha256:$REVIEW_DIGEST"
-    - export NEXUS_DB_VOLUME=reviewed-db-volume NEXUS_BACKUP_VOLUME=reviewed-backup-volume NEXUS_SECRET_DIR=/private/secrets API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
+    - export NEXUS_DB_VOLUME=reviewed-db-volume NEXUS_BACKUP_VOLUME=reviewed-backup-volume NEXUS_SECRET_DIR=/private/secrets NEXUS_REPO_DIR=/private/nexus API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
     - python3 scripts/validate-release.py
     - docker compose config --quiet
 

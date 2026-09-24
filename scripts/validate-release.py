@@ -15,4 +15,8 @@ secret_dir = os.environ.get("NEXUS_SECRET_DIR", "")
 if not secret_dir.startswith("/"):
     raise SystemExit("NEXUS_SECRET_DIR must be absolute")
 
+repo_dir = os.environ.get("NEXUS_REPO_DIR", "")
+if not repo_dir.startswith("/"):
+    raise SystemExit("NEXUS_REPO_DIR must be absolute")
+
 print("Release references and volume names passed static checks")
