@@ -10,6 +10,8 @@ DNS、API/Studioドメイン、ACMEメール、イメージdigest、CORS、デ�
 
 既存のDocker networkとホストの経路を調べ、重複しないプライベートIPv4の/24～/28を`NEXUS_EDGE_SUBNET`へ設定する。Studio APIはこの限定された内部edge networkからの`X-Forwarded-Proto`だけを受け入れる。適用前に`docker compose config --quiet`と`validate-release.py`で値を確認し、起動後に`docker network inspect`でサブネットを照合する。HTTPSの`/health`に加え、Studioの`/api/auth/csrf`がCaddy経由で成功し、Secure Cookieを返すことを確認する。
 
+公開前にさくらのパケットフィルターでSSH 22とWeb 80/443の許可・送信元制限を確認し、Composeでホストへ公開するのはCaddyの80/443のみとする。Dockerが公開したコンテナポートへの通信はUFWの通常の受信ルールを迂回するため、UFWが有効でもそれだけを根拠に5432やAPIが非公開だと判断しない。ホスト側のファイアウォールを変更する場合は、既存SSH接続を保持し、新規SSH接続とコントロールパネルからの復旧経路を確認してから適用する。参照: [DockerのUFWとの関係](https://docs.docker.com/engine/network/packet-filtering-firewalls/#docker-and-ufw)、[さくらのVPSパケットフィルター](https://manual.sakura.ad.jp/vps/network/packetfilter.html)。
+
 ## 私有ファイル
 
 本番採用時は`NEXUS_REPO_DIR`をレビュー済みinfra checkoutの絶対パスへ設定する。systemdへ登録するのは**本repoの**`systemd/nexus-db-backup.service`/`.timer`と`scripts/backup-host.sh`だけとし、`nexus-mobile`側のhost wrapper/timerを並行設置しない。登録前にroot所有のスクリプトがinfra Composeを参照することと、03:00 JSTの既存ジョブとの重複がないことを人間が照合する。このMRでは登録しない。
