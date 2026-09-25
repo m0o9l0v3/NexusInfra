@@ -14,7 +14,11 @@ DNS、API/Studioドメイン、ACMEメール、イメージdigest、CORS、デ�
 
 本番採用時は`NEXUS_REPO_DIR`をレビュー済みinfra checkoutの絶対パスへ設定する。systemdへ登録するのは**本repoの**`systemd/nexus-db-backup.service`/`.timer`と`scripts/backup-host.sh`だけとし、`nexus-mobile`側のhost wrapper/timerを並行設置しない。登録前にroot所有のスクリプトがinfra Composeを参照することと、03:00 JSTの既存ジョブとの重複がないことを人間が照合する。このMRでは登録しない。
 
-`/srv/nexus`にレビュー済みcommitを配置し、rootが所有する`/etc/nexus/production.env`に`.env.example`の値を設定する。`NEXUS_SECRET_DIR`はroot所有・0700のディレクトリ。各秘密ファイルは0600。ファイル名: postgres_password、admin_password、public_password、migrator_password、backup_cipher、public_connection、admin_connection、studio_connection、admin_login、signing_key、audit_key、one_time_key、qr_key。Studio接続先は同じ`nexus_admin` DBの`studio` schemaで、Studio専用ロールの作成と権限は別途レビューする。Compose secretsはファイルマウントなので、VPSへのアクセス権も制限する。SSH秘密鍵、DBパスワード、接続文字列、APIキー、TLS秘密鍵をGitLab repo・CIログ・Issueへ貼らない。
+`/srv/nexus`にレビュー済みcommitを配置し、rootが所有する`/etc/nexus/production.env`に`.env.example`の値を設定する。`NEXUS_SECRET_DIR`はroot所有・0700のディレクトリ。秘密ファイルはGit外で管理する。ファイル名: postgres_password、admin_password、public_password、migrator_password、backup_cipher、public_connection、admin_connection、studio_connection、admin_login、signing_key、audit_key、one_time_key、qr_key。Studio接続先は同じ`nexus_admin` DBの`studio` schemaで、Studio専用ロールの作成と権限は別途レビューする。Compose secretsはファイルマウントなので、VPSへのアクセス権も制限する。SSH秘密鍵、DBパスワード、接続文字列、APIキー、TLS秘密鍵をGitLab repo・CIログ・Issueへ貼らない。
+
+DBのentrypointがrootとして読む`postgres_password`、`admin_password`、`public_password`、`migrator_password`、`backup_cipher`はroot所有・0600とする。非rootで動くAPIが読む`public_connection`、`admin_connection`、`studio_connection`、`admin_login`、`signing_key`、`audit_key`、`one_time_key`、`qr_key`は、採用する各APIイメージの`Config.User`数値UIDを所有者とする0400にする。採用digestごとに`docker image inspect --format '{{.Config.User}}'`を照合し、起動後に各APIの実行UIDで必要な`/run/secrets/`ファイルを読めることを確認する。`audit_key`はPublic/Adminで共用するため、両イメージのUIDが異なる場合は一つのファイルを流用せず、Composeのsecret定義とファイルを分けてから適用する。2026-09-26の隔離VPS検証に用いたPublic/Admin/Studio APIイメージはすべてUID 1654で、各UID所有・0400の検証用ファイルで同時healthcheckに成功した。
+
+Composeのファイル型secretはホストファイルのbind mountであり、サービス側の`uid`/`gid`/`mode`指定では所有者を変更できない。root所有・0600を全APIに一律適用しない。VPS上のディレクトリ0700、ファイルの所有者・権限、コンテナ内の読み取り権限を一組として確認する。
 
 GitLab protected variablesはイメージ参照、ドメイン、承認フラグなどのCI専用値を対象とし、秘密値はmasked/file変数で扱う。ただし現行CIは本番デプロイを実行しないため、秘密をrunnerへ渡す必要はない。秘密のVPS投入経路は人間が決定する。
 

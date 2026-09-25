@@ -5,7 +5,7 @@
 - [ ] さくらパケットフィルターとホストで22/80/443のみ許可。5432、API、Studio、Docker daemon/APIは非公開
 - [ ] Docker socketをコンテナへ渡さず、docker groupへの所属を最小限にする
 - [ ] DB接続ユーザーをadmin/public/studio/migratorで分離し、公開APIは管理接続へフォールバックしない
-- [ ] 全秘密ファイルはGit外・root所有0600、ディレクトリ0700。GitLab protected variables/environmentと承認者を設定
+- [ ] 全秘密ファイルはGit外、ディレクトリはroot所有0700。DB entrypoint用はroot所有0600、API用は採用イメージの実行UID所有0400とし、コンテナ内で読み取り確認。共用secretの利用者UIDが異なる場合はファイルとCompose定義を分ける。GitLab protected variables/environmentと承認者を設定
 - [ ] Caddyの実ドメイン、DNS、ACME、HTTP→HTTPS、証明書更新、HSTS対象サブドメインを確認
 - [ ] Caddy、API、Studioのaccess/errorログを収集し、個人情報・secretが出力されないことを確認
 - [ ] 非root実行、不要capability除去、read-only filesystem、volume権限を各イメージで検証。Caddy/DBの書込先は維持
