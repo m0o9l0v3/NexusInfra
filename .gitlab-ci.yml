@@ -1,3 +1,9 @@
+default:
+  tags:
+    - self-hosted
+    - linux
+    - docker
+
 stages: [validate, package, deploy]
 
 shell-and-yaml:
@@ -65,3 +71,15 @@ production-deploy:
   script:
     - echo "Deployment is a human runbook action; this job intentionally has no SSH key or deployment command."
     - echo "Review docs/deployment.md and approve the protected environment separately."
+
+runner-smoke:
+  stage: validate
+  image: alpine:3.20
+  script:
+    - echo "Nexus self-hosted runner OK"
+    - id
+    - echo "memory.max=$(cat /sys/fs/cgroup/memory.max)"
+    - echo "memory.swap.max=$(cat /sys/fs/cgroup/memory.swap.max)"
+    - echo "cpu.max=$(cat /sys/fs/cgroup/cpu.max)"
+    - test ! -S /var/run/docker.sock
+    - test ! -S /run/user/999/docker.sock
