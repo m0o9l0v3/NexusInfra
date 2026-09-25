@@ -64,6 +64,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__StudioDatabaseFile: /run/secrets/studio_connection
+      ReverseProxy__TrustedNetwork: ${NEXUS_EDGE_SUBNET:?set a reviewed non-overlapping private subnet}
     secrets: [studio_connection]
     networks: [db, edge]
     depends_on:
@@ -105,7 +106,11 @@ services:
     logging: *logs
 networks:
   db: {internal: true}
-  edge: {internal: true}
+  edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${NEXUS_EDGE_SUBNET:?set a reviewed non-overlapping private subnet}
   public: {}
 volumes:
   database:

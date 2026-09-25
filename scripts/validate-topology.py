@@ -10,6 +10,10 @@ assert services["postgres"]["networks"] == ["db"]
 assert "db" not in services["caddy"]["networks"]
 assert compose["networks"]["db"]["internal"] is True
 assert compose["networks"]["edge"]["internal"] is True
+trusted_network = services["studio-api"]["environment"]["ReverseProxy__TrustedNetwork"]
+edge_subnet = compose["networks"]["edge"]["ipam"]["config"][0]["subnet"]
+assert trusted_network == edge_subnet
+assert edge_subnet.startswith("${NEXUS_EDGE_SUBNET:")
 assert compose["volumes"]["database"]["external"] is True
 assert compose["volumes"]["backup"]["external"] is True
 assert "docker compose exec -T --user postgres postgres nexus-backup" in pathlib.Path("scripts/backup-host.sh").read_text()

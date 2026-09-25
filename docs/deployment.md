@@ -8,6 +8,8 @@ VPSへ人間が接続し、`docker ps`、`docker inspect`、`docker volume ls`�
 
 DNS、API/Studioドメイン、ACMEメール、イメージdigest、CORS、データベース接続先と権限を確定する。アプリの別MRをマージして本番イメージとhealthcheckを検証する。既存のデータとバックアップを独立した場所に保全し、復元試験を済ませる。起動時にDBをseedまたはmigrationしないことを確認する。
 
+既存のDocker networkとホストの経路を調べ、重複しないプライベートIPv4の/24～/28を`NEXUS_EDGE_SUBNET`へ設定する。Studio APIはこの限定された内部edge networkからの`X-Forwarded-Proto`だけを受け入れる。適用前に`docker compose config --quiet`と`validate-release.py`で値を確認し、起動後に`docker network inspect`でサブネットを照合する。HTTPSの`/health`に加え、Studioの`/api/auth/csrf`がCaddy経由で成功し、Secure Cookieを返すことを確認する。
+
 ## 私有ファイル
 
 本番採用時は`NEXUS_REPO_DIR`をレビュー済みinfra checkoutの絶対パスへ設定する。systemdへ登録するのは**本repoの**`systemd/nexus-db-backup.service`/`.timer`と`scripts/backup-host.sh`だけとし、`nexus-mobile`側のhost wrapper/timerを並行設置しない。登録前にroot所有のスクリプトがinfra Composeを参照することと、03:00 JSTの既存ジョブとの重複がないことを人間が照合する。このMRでは登録しない。
