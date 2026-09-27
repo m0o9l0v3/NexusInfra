@@ -1,8 +1,8 @@
-name: migration-verify
+name: ci
 
 on:
   push:
-    branches: [codex/github-actions-migration]
+  pull_request:
   workflow_dispatch:
 
 permissions:
