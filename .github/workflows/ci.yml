@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell-and-yaml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: python -m pip install PyYAML==6.0.3
+      - run: shellcheck -S warning scripts/*.sh
+      - run: python -c 'import yaml; [yaml.safe_load(open(p)) for p in ("compose.yaml", ".gitlab-ci.yml")]'
+      - run: python scripts/validate-topology.py
+      - run: python tests/test_pg17_backup.py
+      - run: python scripts/validate-pg17-restore.py
+      - run: python scripts/validate-pg18-rehearsal.py
+      - run: python tests/test_rehearsal_preflight.py
+      - run: python scripts/validate-secrets.py
+      - run: sh -n scripts/*.sh
+
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate disposable Compose configurations
+        shell: bash
+        run: |
+          review_digest=$(printf '%064d' 0)
+          export NEXUS_POSTGRES_IMAGE="example/postgres@sha256:$review_digest" PUBLIC_API_IMAGE="example/public@sha256:$review_digest" ADMIN_API_IMAGE="example/admin@sha256:$review_digest" STUDIO_API_IMAGE="example/studio-api@sha256:$review_digest" STUDIO_WEB_IMAGE="example/studio-web@sha256:$review_digest" CADDY_IMAGE="example/caddy@sha256:$review_digest"
+          export NEXUS_DB_VOLUME=reviewed-db-volume NEXUS_BACKUP_VOLUME=reviewed-backup-volume NEXUS_SECRET_DIR=/private/secrets NEXUS_REPO_DIR=/private/nexus API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
+          export NEXUS_EDGE_SUBNET=172.30.250.0/28
+          python3 scripts/validate-release.py
+          docker compose config --quiet
+          export PG17_RESTORE_PROJECT=nexus-pg17-restore-ci PG17_RESTORE_IMAGE="example/postgres17@sha256:$review_digest" PG17_DB_NAME=nexus_admin PG17_RESTORE_VOLUME=nexus-pg17-restore-ci-volume PG17_RESTORE_PASSWORD_FILE=/private/restore-password
+          docker compose -f compose.pg17-restore.yml config --quiet
+          export PG18_REHEARSAL_PROJECT=nexus-pg18-rehearsal-ci PG18_REHEARSAL_DB_VOLUME=nexus-pg18-rehearsal-ci-db PG18_REHEARSAL_BACKUP_VOLUME=nexus-pg18-rehearsal-ci-backup PG18_REHEARSAL_SECRET_DIR=/private/disposable-secrets
+          docker compose -f compose.pg18-rehearsal.yml config --quiet
+
+  caddy-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: docker run --rm -v "$PWD:/src" -w /src -e API_DOMAIN=api.example.invalid -e STUDIO_DOMAIN=studio.example.invalid -e ACME_EMAIL=ops@example.invalid caddy:2 caddy validate --config Caddyfile --adapter caddyfile
