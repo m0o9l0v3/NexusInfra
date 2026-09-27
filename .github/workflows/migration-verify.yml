@@ -12,8 +12,8 @@ jobs:
   shell-and-yaml:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
@@ -31,7 +31,7 @@ jobs:
   compose-config:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Validate disposable Compose configurations
         shell: bash
         run: |
@@ -49,5 +49,5 @@ jobs:
   caddy-validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker run --rm -v "$PWD:/src" -w /src -e API_DOMAIN=api.example.invalid -e STUDIO_DOMAIN=studio.example.invalid -e ACME_EMAIL=ops@example.invalid caddy:2 caddy validate --config Caddyfile --adapter caddyfile
