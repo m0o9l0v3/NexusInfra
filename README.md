@@ -1,5 +1,8 @@
 # nexus-infra
 
+> **開発の正本:** [GitHub repository](https://github.com/m0o9l0v3/NexusInfra)
+> このGitLab repositoryはSecondary/DRバックアップです。通常の開発・Issue/PR管理はGitHubで行ってください。Git refsはVPSから約15分ごと、Issue・PR等のメタデータは毎時バックアップされます。GitLabへの直接pushやIssueの手編集は避けてください。
+
 Nexus 本番VPSの構成・運用手順（適用は承認制）
 
 ## Getting started
