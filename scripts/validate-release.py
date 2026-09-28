@@ -6,7 +6,7 @@ SOURCE_VOLUME = "nexus_postgres_data"
 
 for key in ("NEXUS_POSTGRES_IMAGE", "PUBLIC_API_IMAGE", "ADMIN_API_IMAGE", "STUDIO_API_IMAGE", "STUDIO_WEB_IMAGE", "CADDY_IMAGE"):
     value = os.environ.get(key, "")
-    if not re.fullmatch(r"[^\\s]+@sha256:[0-9a-f]{64}", value):
+    if not re.fullmatch(r"[^\s]+@sha256:[0-9a-f]{64}", value):
         raise SystemExit(f"{key} must be an immutable image digest")
 
 db = os.environ.get("NEXUS_DB_VOLUME", "")
