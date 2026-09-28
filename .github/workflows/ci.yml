@@ -22,6 +22,7 @@ jobs:
       - run: python -c 'import yaml; [yaml.safe_load(open(p)) for p in ("compose.yaml", ".gitlab-ci.yml")]'
       - run: python scripts/validate-topology.py
       - run: python tests/test_pg17_backup.py
+      - run: python tests/test_validate_release.py
       - run: python scripts/validate-pg17-restore.py
       - run: python scripts/validate-pg18-rehearsal.py
       - run: python tests/test_rehearsal_preflight.py
