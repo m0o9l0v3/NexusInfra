@@ -1,0 +1,35 @@
+# Disposable PostgreSQL 18 logical-migration rehearsal. Never attach the PostgreSQL 17 volume.
+name: ${PG18_REHEARSAL_PROJECT:?set a unique disposable project name}
+services:
+  postgres:
+    image: ${NEXUS_POSTGRES_IMAGE:?pin the reviewed PostgreSQL 18 pgBackRest image digest}
+    restart: "no"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: nexus_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password, admin_password, public_password, migrator_password, backup_cipher]
+    volumes:
+      - database:/var/lib/postgresql
+      - backup:/backup
+    networks: [rehearsal]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d nexus_admin"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+networks:
+  rehearsal: {internal: true}
+volumes:
+  database:
+    external: true
+    name: ${PG18_REHEARSAL_DB_VOLUME:?identify a new empty database volume}
+  backup:
+    external: true
+    name: ${PG18_REHEARSAL_BACKUP_VOLUME:?identify a different new empty backup volume}
+secrets:
+  postgres_password: {file: "${PG18_REHEARSAL_SECRET_DIR:?private disposable secret directory}/postgres_password"}
+  admin_password: {file: "${PG18_REHEARSAL_SECRET_DIR}/admin_password"}
+  public_password: {file: "${PG18_REHEARSAL_SECRET_DIR}/public_password"}
+  migrator_password: {file: "${PG18_REHEARSAL_SECRET_DIR}/migrator_password"}
+  backup_cipher: {file: "${PG18_REHEARSAL_SECRET_DIR}/backup_cipher"}

@@ -1,0 +1,9 @@
+[Unit]
+Description=Nexus encrypted PostgreSQL backup through infra Compose
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nexus-backup-host daily
+Nice=10

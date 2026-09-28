@@ -1,0 +1,86 @@
+default:
+  tags:
+    - self-hosted
+    - linux
+    - docker
+
+stages: [validate, package, deploy]
+
+shell-and-yaml:
+  stage: validate
+  image: python:3.12-alpine
+  before_script:
+    - apk add --no-cache shellcheck git
+    - pip install --no-cache-dir PyYAML==6.0.3
+  script:
+    - shellcheck scripts/*.sh
+    - python -c 'import yaml; [yaml.safe_load(open(p)) for p in ("compose.yaml", ".gitlab-ci.yml")]'
+    - python scripts/validate-topology.py
+    - python tests/test_pg17_backup.py
+    - python scripts/validate-pg17-restore.py
+    - python scripts/validate-pg18-rehearsal.py
+    - python tests/test_rehearsal_preflight.py
+    - python scripts/validate-secrets.py
+    - sh -n scripts/*.sh
+
+compose-config:
+  stage: validate
+  image: docker:27
+  before_script:
+    - apk add --no-cache python3
+  script:
+    - export REVIEW_DIGEST=$(printf '%064d' 0)
+    - export NEXUS_POSTGRES_IMAGE="example/postgres@sha256:$REVIEW_DIGEST" PUBLIC_API_IMAGE="example/public@sha256:$REVIEW_DIGEST" ADMIN_API_IMAGE="example/admin@sha256:$REVIEW_DIGEST" STUDIO_API_IMAGE="example/studio-api@sha256:$REVIEW_DIGEST" STUDIO_WEB_IMAGE="example/studio-web@sha256:$REVIEW_DIGEST" CADDY_IMAGE="example/caddy@sha256:$REVIEW_DIGEST"
+    - export NEXUS_DB_VOLUME=reviewed-db-volume NEXUS_BACKUP_VOLUME=reviewed-backup-volume NEXUS_SECRET_DIR=/private/secrets NEXUS_REPO_DIR=/private/nexus API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
+    - export NEXUS_EDGE_SUBNET=172.30.250.0/28
+    - python3 scripts/validate-release.py
+    - docker compose config --quiet
+    - export PG17_RESTORE_PROJECT=nexus-pg17-restore-ci PG17_RESTORE_IMAGE="example/postgres17@sha256:$REVIEW_DIGEST" PG17_DB_NAME=nexus_admin PG17_RESTORE_VOLUME=nexus-pg17-restore-ci-volume PG17_RESTORE_PASSWORD_FILE=/private/restore-password
+    - docker compose -f compose.pg17-restore.yml config --quiet
+    - export PG18_REHEARSAL_PROJECT=nexus-pg18-rehearsal-ci PG18_REHEARSAL_DB_VOLUME=nexus-pg18-rehearsal-ci-db PG18_REHEARSAL_BACKUP_VOLUME=nexus-pg18-rehearsal-ci-backup PG18_REHEARSAL_SECRET_DIR=/private/disposable-secrets
+    - docker compose -f compose.pg18-rehearsal.yml config --quiet
+
+caddy-validate:
+  stage: validate
+  image:
+    name: caddy:2
+    entrypoint: [""]
+  variables:
+    API_DOMAIN: api.example.invalid
+    STUDIO_DOMAIN: studio.example.invalid
+    ACME_EMAIL: ops@example.invalid
+  script:
+    - caddy validate --config Caddyfile --adapter caddyfile
+
+package-review:
+  stage: package
+  image: alpine:3.20
+  script:
+    - echo "Images are built, tested and pushed by their owning application repositories."
+    - echo "Record exact registry digests in a reviewed release manifest before production."
+
+production-deploy:
+  stage: deploy
+  image: alpine:3.20
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+    - when: never
+  allow_failure: false
+  script:
+    - echo "Deployment is a human runbook action; this job intentionally has no SSH key or deployment command."
+    - echo "Review docs/deployment.md and approve the protected environment separately."
+
+runner-smoke:
+  stage: validate
+  image: alpine:3.20
+  script:
+    - echo "Nexus self-hosted runner OK"
+    - id
+    - echo "memory.max=$(cat /sys/fs/cgroup/memory.max)"
+    - echo "memory.swap.max=$(cat /sys/fs/cgroup/memory.swap.max)"
+    - echo "cpu.max=$(cat /sys/fs/cgroup/cpu.max)"
+    - test ! -S /var/run/docker.sock
+    - test ! -S /run/user/999/docker.sock

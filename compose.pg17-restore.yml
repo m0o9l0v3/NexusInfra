@@ -1,0 +1,28 @@
+# Disposable PostgreSQL 17 restore rehearsal only. Requires a newly created empty volume.
+name: ${PG17_RESTORE_PROJECT:?set a unique disposable project name}
+services:
+  postgres:
+    image: ${PG17_RESTORE_IMAGE:?pin the reviewed PostgreSQL 17 image digest}
+    restart: "no"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ${PG17_DB_NAME:?use the inventoried database name}
+      POSTGRES_PASSWORD_FILE: /run/secrets/restore_password
+    secrets: [restore_password]
+    volumes:
+      - restore_db:/var/lib/postgresql/data
+    networks: [restore]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+networks:
+  restore: {internal: true}
+volumes:
+  restore_db:
+    external: true
+    name: ${PG17_RESTORE_VOLUME:?identify a new empty restore volume}
+secrets:
+  restore_password:
+    file: ${PG17_RESTORE_PASSWORD_FILE:?private file outside Git}
