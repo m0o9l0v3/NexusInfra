@@ -1,0 +1,17 @@
+# DB migrationのレビューと手動適用条件
+
+現行17のDBを18へ移す手順は[17→18の移行gate](transition-postgres-17-to-18.md)を先行させる。元volumeに18用のmigrationを直接実行しない。
+
+`nexus-mobile` の移行SQLは `tools/database/Nexus.Database.csproj` の `script` コマンドでCI成果物として生成する。StudioのEF Core移行SQLはStudio repoの対象コミットから別に生成する。どちらもアプリ起動、イメージビルド、infra CI、CI deployでは適用しない。2つの移行履歴と`public`/`studio` schemaの所有者・権限を混同しない。
+
+## 隔離18 DBで確認する順序
+
+新規の空DBであることが確認できた場合は、MobileのDB初期roleを作成し、Mobileのレビュー済み`public` schema SQLを`nexus_migrator`で適用する。その後、[Studio専用role候補](https://gitlab.com/11h27m/nexusstudio/-/merge_requests/13)のSQLを管理者がレビューして適用し、`nexus_studio_migrator`でStudioのレビュー済みSQLを適用し、最後にStudio runtimeの表・sequence権限を付与する。両アプリの`__EFMigrationsHistory`は`public`と`studio`で分離して照合する。APIはruntime roleのみで起動する。
+
+17のdumpから復元する場合は、まずschema・所有者・履歴・roleを棚卸しする。`--no-owner`で復元した表の所有者と、Mobileの`nexus_owner`/`nexus_migrator`が一致するとは限らない。既存表があるDBへ新規DB向けSQLを強行したり、履歴を偽装したりしない。所有者・role・履歴の移行SQLを別途レビューして隔離DBで成功させるまで止める。
+
+適用前に担当者がSQL全文、対象DB・schema・移行ID、ロック時間と既存データへの影響、前後のアプリ互換性をレビューする。同じPostgreSQLメジャー版の隔離DBで、同じSQLを適用し、再実行時の挙動とAPIを確認する。既存DBを新規DBとして扱う移行は拒否する。
+
+本番適用は別途承認されたメンテナンス作業とする。事前にpgBackRestの正常なバックアップ・WAL状態、Macコピーの成功日時と暗号鍵の別保管、**新しい空volumeへの復元試験**、必要な空き容量を確認する。APIを停止して移行専用ロールでレビュー済みSQLを一度だけ実行し、移行履歴・権限・代表データを照合してからAPIを再開する。失敗時はAPIを停止したまま調査し、自動の逆migrationや既存volumeの初期化はしない。必要な復旧は別volumeへ復元して検証した後に人間が切替を判断する。
+
+このMRはSQLの本番適用を実行せず、実VPSのDB版・既存volume・データ配置も確認できていない。これらは適用前の人間による照合事項である。
