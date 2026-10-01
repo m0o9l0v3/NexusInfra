@@ -9,3 +9,4 @@
 secrets/
 backups/
 .DS_Store
+!sql/pg17-baseline/*.sql

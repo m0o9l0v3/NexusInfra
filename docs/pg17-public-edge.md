@@ -51,11 +51,13 @@ docker inspect --type container --format '{{index .Config.Labels "com.docker.com
 | 既存networkのsubnet（新規subnetとの非衝突） | | | | |
 | Compose project名 | | | | |
 
-## 3. `nexus_admin` のschema・role・権限
+## 3. アプリDBのschema・role・権限
+
+> 2026-10-01の確認結果: **NO-GO**。アプリDBは`nexus`（`nexus_admin`ではない）、roleは特権の`nexus`のみ、user table 0件。runtime用roleとschemaの構築は[pg17-baseline.md](pg17-baseline.md)で別承認とする。
 
 目的: public-apiが必要とするschema/権限があるか。**SELECTのみ。** 不足していてもrole作成・GRANTはここで行わず、別レビューにする。
 
-DB名は未確定として扱う。**先に全DBを列挙して記録し**、アプリのDBを特定してから以降の`<APP_DB>`に使う（`nexus_admin`は想定名であり、実在を確認するまで前提にしない）。
+DB名は未確定として扱う。**先に全DBを列挙して記録し**、アプリのDBを特定してから以降の`<APP_DB>`に使う（DB名は実在を確認するまで前提にしない（現行の確認結果は上記））。
 
 ```sh
 # 1) DB一覧（名前・所有者のみ）
@@ -160,6 +162,6 @@ ls -l --time-style=long-iso <PG17_BACKUP_DIR>
 - [ ] PG17の最新バックアップとVPS外コピー、別volume復元が確認済み
 - [ ] public-api/Caddyのdigest・registry経路・アーキテクチャが整合
 - [ ] 80/443・DNS・ACMEの前提が確認済み、22が維持される
-- [ ] `nexus_admin`に必要な権限があるか、不足分は別レビューで承認済み
+- [ ] `nexus_public`などruntime roleの権限が[pg17-baseline.md](pg17-baseline.md)の契約どおりか、不足分は別レビューで承認済み
 
 未達の項目がある間は`nexus-edge-pg17`の実装・本番適用へ進まず、現行PG17を維持する。
