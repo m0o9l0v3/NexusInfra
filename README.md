@@ -9,6 +9,7 @@
 2026-09-24に人間が確認した稼働中DBはPostgreSQL 17.11（`postgres:17-alpine`、volume `nexus_postgres_data`、マウント先`/var/lib/postgresql/data`）です。本repoの`compose.yaml`はPostgreSQL 18とpgBackRest派生イメージ、新しいDB/backup volume向けです。**既存17 volumeを18のComposeへ接続しないでください。** 現行VPSのバックアップと隔離復元を先に行い、18移行を別volumeで検証する設計です。
 
 - [17→18の移行gate](docs/transition-postgres-17-to-18.md)：現行17の保全、Macコピー、隔離復元、18でのリハーサル、切替とrollback境界
+- [PG17に触れない公開レイヤーのVPS事実確認](docs/pg17-public-edge.md)：`nexus-edge-pg17`の前提となる読み取り専用の確認手順と記録表（Issue #5）
 - [構成](docs/architecture.md)・[導入](docs/deployment.md)・[DB migration](docs/migration.md)
 - [18移行後のバックアップと復元](docs/backup-restore.md)・[災害復旧](docs/disaster-recovery.md)・[本番適用前チェック](docs/security-checklist.md)
 
