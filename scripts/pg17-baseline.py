@@ -155,6 +155,7 @@ class Rehearsal:
         self.env = dict(os.environ, PG17_BASELINE_PROJECT=cfg["project"], PG17_BASELINE_VOLUME=cfg["volume"],
                         PG17_BASELINE_IMAGE=cfg["image"], PG17_BASELINE_PASSWORD_FILE=str(cfg["secret_dir"] / "baseline_password"))
         self.passed = []
+        self.started = False
 
     def run(self, args, *, stdin=None, extra_env=None, check=True):
         result = subprocess.run([str(a) for a in args], env=dict(self.env, **(extra_env or {})), input=stdin,
@@ -201,6 +202,10 @@ class Rehearsal:
         volumes = subprocess.run(self.docker + ["volume", "ls", "--format", "{{.Name}}"], capture_output=True, text=True).stdout.split()
         if LIVE_CONTAINER in names or LIVE_VOLUME in volumes:
             fail("The live PostgreSQL container or volume exists on this engine; run only on an isolated machine")
+        occupied = subprocess.run(self.docker + ["ps", "-a", "-q", "--filter", f"label=com.docker.compose.project={self.cfg['project']}"],
+                                  capture_output=True, text=True).stdout.split()
+        if occupied:
+            fail("Baseline project already has containers; use a new project name (nothing was touched)")
         if self.cfg["volume"] in volumes:
             fail("Baseline volume already exists; use a new empty volume name")
         secret_dir = self.cfg["secret_dir"]
@@ -213,6 +218,7 @@ class Rehearsal:
             path.write_text(value)
             path.chmod(0o600)
         self.run(self.docker + ["volume", "create", self.cfg["volume"]])
+        self.started = True
         self.run(self.compose + ["up", "-d", "--wait", "--wait-timeout", "120", "postgres"])
         version = self.psql("nexus", "SHOW server_version", host="localhost").stdout.strip()
         if not version.startswith("17."):
@@ -309,6 +315,9 @@ class Rehearsal:
             fail("Migration replay changed the history")
 
     def cleanup(self):
+        if not self.started:
+            print("Nothing was started by this run; no containers were touched.")
+            return
         self.run(self.compose + ["down", "--remove-orphans"], check=False)
         print(f"Containers removed. Remove the disposable volume yourself: docker volume rm {self.cfg['volume']}")
         print(f"Private secrets remain in {self.cfg['secret_dir']}; delete them when done.")
