@@ -55,19 +55,35 @@ docker inspect --type container --format '{{index .Config.Labels "com.docker.com
 
 目的: public-apiが必要とするschema/権限があるか。**SELECTのみ。** 不足していてもrole作成・GRANTはここで行わず、別レビューにする。
 
+DB名は未確定として扱う。**先に全DBを列挙して記録し**、アプリのDBを特定してから以降の`<APP_DB>`に使う（`nexus_admin`は想定名であり、実在を確認するまで前提にしない）。
+
 ```sh
-docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d nexus_admin -c '\dn'
-docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d nexus_admin -c '\du'
-docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d nexus_admin -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY 1,2"
+# 1) DB一覧（名前・所有者のみ）
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -c "SELECT datname, pg_get_userbyid(datdba) AS owner FROM pg_database WHERE NOT datistemplate ORDER BY 1"
+# 2) 特定した<APP_DB>のschema・role・表（行データは見ない）
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c '\dn'
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c '\du'
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY 1,2"
 ```
 
-パスワード付きの`\du+`出力や行データ（個人情報）は記録しない。
+実効権限は、public-apiが使う（または使う予定の）role `<APP_ROLE>`と必要なschema/表/sequenceを当てて照会する。`has_*_privilege`は参照のみで状態を変えない。
+
+```sh
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolcanlogin FROM pg_roles WHERE rolname = '<APP_ROLE>'"
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT has_database_privilege('<APP_ROLE>', current_database(), 'CONNECT') AS connect, has_schema_privilege('<APP_ROLE>', '<SCHEMA>', 'USAGE') AS schema_usage"
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT c.relkind, c.relname, has_table_privilege('<APP_ROLE>', c.oid, 'SELECT') AS sel, has_table_privilege('<APP_ROLE>', c.oid, 'INSERT') AS ins, has_table_privilege('<APP_ROLE>', c.oid, 'UPDATE') AS upd, has_table_privilege('<APP_ROLE>', c.oid, 'DELETE') AS del FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '<SCHEMA>' AND c.relkind IN ('r','v','m','p') ORDER BY 2"
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT c.relname, has_sequence_privilege('<APP_ROLE>', c.oid, 'USAGE') AS usage FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '<SCHEMA>' AND c.relkind = 'S' ORDER BY 1"
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT pg_get_userbyid(defaclrole) AS grantor, defaclobjtype, defaclacl FROM pg_default_acl"
+```
+
+パスワード付きの`\du+`出力や行データ（個人情報）は記録しない。read-only roleが適切かは、必要最小権限（`SELECT`のみ、書込み権限なし）との差で判断し、不足分の付与は別レビュー。
 
 | 項目 | 値 | 確認日 | 確認者 | 合否 |
 | --- | --- | --- | --- | --- |
+| 全DB一覧とアプリDB名（`<APP_DB>`） | | | | |
 | public-apiが必要とするschema | | | | |
 | 既存role（名前のみ） | | | | |
-| 必要な権限の有無（read-only role必要か） | | | | |
+| `<APP_ROLE>`の実効権限（CONNECT/USAGE/表・sequence、default ACL）と、read-only roleが必要か | | | | |
 
 ## 4. イメージdigest・registry・実行UID・CPUアーキテクチャ
 
