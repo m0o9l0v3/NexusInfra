@@ -10,6 +10,7 @@
 
 - [17→18の移行gate](docs/transition-postgres-17-to-18.md)：現行17の保全、Macコピー、隔離復元、18でのリハーサル、切替とrollback境界
 - [PG17に触れない公開レイヤーのVPS事実確認](docs/pg17-public-edge.md)：`nexus-edge-pg17`の前提となる読み取り専用の確認手順と記録表（Issue #5）
+- [PG17 baselineとpublic-api runtime role](docs/pg17-baseline.md)：Mobile移行経路の調査、role契約、隔離PG17での構築・検証（本番未適用）
 - [構成](docs/architecture.md)・[導入](docs/deployment.md)・[DB migration](docs/migration.md)
 - [18移行後のバックアップと復元](docs/backup-restore.md)・[災害復旧](docs/disaster-recovery.md)・[本番適用前チェック](docs/security-checklist.md)
 

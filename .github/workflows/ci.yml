@@ -26,6 +26,7 @@ jobs:
       - run: python scripts/validate-pg17-restore.py
       - run: python scripts/validate-pg18-rehearsal.py
       - run: python tests/test_rehearsal_preflight.py
+      - run: python tests/test_pg17_baseline.py
       - run: python scripts/validate-secrets.py
       - run: sh -n scripts/*.sh
 
@@ -46,6 +47,9 @@ jobs:
           docker compose -f compose.pg17-restore.yml config --quiet
           export PG18_REHEARSAL_PROJECT=nexus-pg18-rehearsal-ci PG18_REHEARSAL_DB_VOLUME=nexus-pg18-rehearsal-ci-db PG18_REHEARSAL_BACKUP_VOLUME=nexus-pg18-rehearsal-ci-backup PG18_REHEARSAL_SECRET_DIR=/private/disposable-secrets
           docker compose -f compose.pg18-rehearsal.yml config --quiet
+          export PG17_BASELINE_PROJECT=nexus-pg17-baseline-ci PG17_BASELINE_VOLUME=nexus-pg17-baseline-ci-db PG17_BASELINE_IMAGE="example/postgres17@sha256:$review_digest" PG17_BASELINE_PASSWORD_FILE=/private/disposable-secrets/baseline_password PG17_BASELINE_SECRET_DIR=/private/disposable-secrets
+          python3 scripts/pg17-baseline.py preflight
+          docker compose -f compose.pg17-baseline.yml config --quiet
 
   caddy-validate:
     runs-on: ubuntu-latest

@@ -1,0 +1,30 @@
+# Disposable PostgreSQL 17 baseline rehearsal only. Mirrors the live shape (POSTGRES_USER/DB nexus)
+# but uses a NEW empty volume. Never name the live data volume. No published ports.
+# Driven by scripts/pg17-baseline.py; do not combine with compose.yaml or compose.pg17-edge.yaml.
+name: ${PG17_BASELINE_PROJECT:?set a unique disposable project name}
+services:
+  postgres:
+    image: ${PG17_BASELINE_IMAGE:?pin the reviewed PostgreSQL 17 image digest}
+    restart: "no"
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_DB: nexus
+      POSTGRES_PASSWORD_FILE: /run/secrets/baseline_password
+    secrets: [baseline_password]
+    volumes:
+      - baseline_db:/var/lib/postgresql/data
+    networks: [baseline]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U nexus -d nexus"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+networks:
+  baseline: {internal: true}
+volumes:
+  baseline_db:
+    external: true
+    name: ${PG17_BASELINE_VOLUME:?identify a new empty baseline volume}
+secrets:
+  baseline_password:
+    file: ${PG17_BASELINE_PASSWORD_FILE:?private file outside Git}
