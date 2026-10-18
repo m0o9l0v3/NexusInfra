@@ -10,6 +10,8 @@
 - public image digest（`@sha256:`）とMobile commit SHAは秘密ではないので、#7の記録に使ってよい。
 - VPSでは読み取りのみ。`docker compose up/down/restart/stop/rm`、DBへの書込み、パケットフィルター変更、timer登録、`docker pull`はしない。
 
+D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で別に決める。
+
 所要の目安: Part 1は判断待ちを除き30分、Part 2は1時間程度。
 
 ## Part 1: VPSの外で決めること
