@@ -33,19 +33,34 @@
 - `__EFMigrationsHistory`: SELECT
 - 他の管理用表・将来追加表: 権限なし（default privilegesなし）、DDL・所有者へのSET ROLE不可
 
-**判断: B。** 根拠: `LogPersistenceService`が前回hashを`visit_logs`から読み、`visit_logs`へINSERTする。`LogsController`の`POST /api/logs`・`/api/logs/batch`（匿名参加者ログ、レート制限付き、202を返し非同期で永続化）から呼ばれる。MobileのCIと`tools/database verify`も「ログINSERT成功・hash連鎖・`session_id`読み取り拒否・UPDATE/DELETE拒否」を要求している。A（INSERT廃止）にはAPI仕様・監査ログの変更が必要で、Mobile側の別判断になる。**Bの正式化は人間とNexusMobile側で確認すること。**
+**判断: B。** 根拠: `LogPersistenceService`が前回hashを`visit_logs`から読み、`visit_logs`へINSERTする。`LogsController`の`POST /api/logs`・`/api/logs/batch`（匿名参加者ログ、レート制限付き、202を返し非同期で永続化）から呼ばれる。MobileのCIと`tools/database verify`も「ログINSERT成功・hash連鎖・`session_id`読み取り拒否・UPDATE/DELETE拒否」を要求している。A（INSERT廃止）にはAPI仕様・監査ログの変更が必要で、Mobile側の別判断になる。
 
-## 4. Issue #7 の受け入れ条件（修正案）
+**2026-10-18にBで正式化（人間承認）。** NexusMobile `develop` `6459abd`でも`apps/public-api`・`apps/admin-api`・`tools`・`deploy`は`87446aa`から変更なし。Mobile側で契約を変える場合は、この節と4節を先に改訂する。
 
-現行文「read-only roleでDB書き込みが拒否される」はBと矛盾する。次に置き換える案:
+## 4. Issue #7 の受け入れ条件（正式、契約B）
 
-- [ ] `nexus_public`がDatabaseReadiness相当の判定を通る（非特権、`nexus_owner`非所属、`public`にCREATEなし）
-- [ ] `spots`/`events`のSELECTは公開行のみ（RLS）。管理用表・将来追加表のSELECTは拒否
+2026-10-18正式化。旧文「read-only roleでDB書き込みが拒否される」は契約Bと矛盾するため、次の条件で置き換える。すべて使い捨てPG17コンテナ・新規volume・ダミーデータで確認し、実本番DB・dump・secretは使わない。**隔離での成功を本番適用済みと記載しない。**
+
+DB権限（`nexus_public`で接続）:
+
+- [ ] `nexus_public`がDatabaseReadiness相当の判定を通る（非特権、`nexus_owner`非所属、`public`にCREATEなし、移行履歴が2本と一致）
+- [ ] `spots`/`events`のSELECTは公開行（`is_published = true`）のみ。管理用表・将来追加表のSELECTは拒否
 - [ ] `visit_logs`: INSERTと`chain_id, created_at, hash`のSELECTだけ成功。`session_id`等の読み取り、UPDATE、DELETE、TRUNCATEは拒否
 - [ ] `spots`/`events`へのINSERT/UPDATE/DELETE、`__EFMigrationsHistory`の更新は拒否
 - [ ] CREATE/ALTER/DROP、CREATE ROLE、`SET ROLE nexus_owner`、`COPY ... PROGRAM`は拒否
-- [ ] 起動時にmigration/seedが走らない（public-apiはreadinessのみ）
-- [ ] 他の項目（Caddy経由の`/health`、UID、再起動後の再接続、port、`-p`明示・`down -v`不使用）は変更なし
+
+実イメージ（採用digest）とCaddy:
+
+- [ ] 起動時にmigration/seedが走らない（public-apiはreadinessのみ）。特権role（`nexus`）の接続文字列ではreadinessで起動が失敗する
+- [ ] Caddy（`api.localhost`、内部CA）経由で`/health`と代表GET（`/api/spots/public`、`/api/events/today`）が200
+- [ ] Caddy経由の`POST /api/logs`が202を返し、`visit_logs`に行が増えてhash連鎖が続く
+- [ ] `RateLimiting__KnownNetworks__0`にedge subnetを渡し、rate limitがCaddy経由のクライアントIP単位で働く（全クライアントがCaddyのIPで1つの枠を共有しない）
+- [ ] `docker image inspect --format '{{.Config.User}}'`の実行UIDと、そのUID所有0400のsecret（`public_connection`、`audit_key`）が読めること
+- [ ] public-api再起動後にDBへ再接続し、上記GETが再び成功する
+- [ ] Caddyがbackend networkに参加していない。host portは80/443のみ
+- [ ] 停止は`-p`明示、`down -v`不使用（volumeは手動で個別に削除）
+
+記録（Issue #7へ）: public-api/Caddy/PG17のdigest、Mobile commit、`pg17-baseline.py manifest`のSQL sha256、各項目の合否と失敗条件。
 
 ## 5. 隔離baselineの構築と検証
 
@@ -78,6 +93,5 @@ python3 scripts/pg17-baseline.py run        # 構築と47項目の検証。volum
 
 ## 7. 未解決・要確認
 
-- B（`visit_logs` INSERT）の正式化をNexusMobile側で確認（#7の条件変更もこれに依存）
 - 現行PG17の他の書込元・接続元（`nexus` superuserの利用者）。DB所有者変更・`PUBLIC`権限剥奪の影響
 - PG17イメージのdigest（現行は`postgres:17-alpine`のタグ）と、Mobile採用commit/digestの固定
