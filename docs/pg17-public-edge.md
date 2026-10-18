@@ -103,6 +103,11 @@ docker buildx imagetools inspect <IMAGE_REF> | head -n 5   # digest確認のみ
 | コンテナ実行UID | | | | |
 | VPS CPUアーキテクチャ（digestが対応manifestを持つか） | | | | |
 
+> コードから確認済み（2026-10-18、NexusMobile `develop` `6459abd`。VPSの値ではない）:
+> - 実行UID: `apps/public-api/Dockerfile`の最終段は`USER $APP_UID`（基底`mcr.microsoft.com/dotnet/aspnet:8.0`、既定1654）。採用digestで`docker image inspect --format '{{.Config.User}}'`を実測し、secretの所有者をその値に合わせる（Issue #7）。
+> - healthcheck: `/app/healthcheck`が`curl`で`http://127.0.0.1:8080/health`を叩く。Composeの`healthcheck`はこれを使う。
+> - registry経路: digestを発行するのは**GitLab CIの`public-api-image`ジョブのみ**（既定ブランチ、GitLab Registryへcommit SHAタグでpush、`image-digests/public-api.txt`に`@sha256:`を記録）。GitHub Actionsはbuildだけでpushしない。GitHubがPrimaryになった後もこの経路が動くか、VPSのpull認証をどうするかは**要確認**（未確定のままdigestを採用しない）。
+
 ## 5. ネットワーク境界・DNS・ACME
 
 ```sh
@@ -138,6 +143,12 @@ df -h /var/lib/docker
 | ログに個人情報（IP、トークン、本文）が残るか・保持期間 | | | | |
 | 監視方法（死活、証明書期限、ディスク） | | | | |
 | 4GB VPSのメモリ余裕（追加コンテナ分） | | | | |
+
+> コードから確認済み（2026-10-18、NexusMobile `develop` `6459abd`。VPSの値ではない）:
+> - CORS: `Cors:AllowedOrigins`のoriginだけ許可（任意header/method、credentialsなし）。iOSアプリはCORS不要のため、許可すべきブラウザoriginを決めて設定する。
+> - rate limit: クライアントIP単位のFixed Window。`POST /api/logs` 60回/60秒、`/api/logs/batch` 12回/60秒。GET系と`/health`は制限なし。
+> - **プロキシ越しのクライアントIP:** `X-Forwarded-For`は`RateLimiting:KnownNetworks`/`KnownProxies`のproxyからだけ信頼する（未設定ならloopbackのみ、`ForwardLimit=1`）。Caddy経由では`RateLimiting__KnownNetworks__0`にedge subnetを渡さないと、全クライアントがCaddyのIPで1つの枠を共有する。NexusMobileの`deploy/database/compose.production.yml`はこれを必須にしているが、PG18の`compose.yaml`とIssue #6 T1の構成には無い → #6で`PG17_EDGE_SUBNET`を渡すこと。
+> - ログ: Serilogをstdoutへ（`Microsoft`はWarning以上）。request logはmethod・path・status・時間で、クライアントIP・本文は既定で含まない。DB永続化失敗時は例外を`LogError`で出す（DBエラー本文が載り得る）。Caddyはglobal `log`のみでsite単位のaccess logを設定していないため、アクセスIPは記録しない。保持はjson-file `10m×3`。
 
 ## 7. PG17バックアップ・復元検証・既存timer
 
