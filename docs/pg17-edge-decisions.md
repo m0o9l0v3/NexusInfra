@@ -1,10 +1,10 @@
-# PG17公開レイヤー: 未決の判断3件（AI相談用）
+# PG17公開レイヤー: 判断3件（DEC-1〜3決定済み）
 
 この文書は、Codex・ChatGPTなど別のAIと3件の判断を相談するための**自己完結した資料**である。この文書だけで判断できるように、事実・制約・選択肢・決定の記録欄をまとめた。決まったら各判断の「決定」欄を埋め、「決定後に更新する箇所」を直す。
 
 ```yaml
 document: pg17-edge-decisions
-status: open            # 3件とも決まったら decided にする
+status: decided         # 方針の決定。実装・検証・本番適用の完了ではない
 created: 2026-10-18
 repositories:
   infra: m0o9l0v3/NexusInfra (main 1f55578)
@@ -13,15 +13,15 @@ related_issues: [NexusInfra#5, NexusInfra#6, NexusInfra#7, NexusMobile#81]
 decisions:
   - id: DEC-1
     topic: public-apiのrate limitで、Caddy越しのクライアントIPを正しく扱う
-    status: open
+    status: decided
     blocks: [NexusInfra#6 T1, NexusInfra#7]
   - id: DEC-2
     topic: public-apiのimmutable digestをどこで発行し、VPSがどう取得するか
-    status: open
+    status: decided
     blocks: [NexusInfra#5 §4, NexusInfra#7]
   - id: DEC-3
     topic: public-apiのCORS許可origin
-    status: open
+    status: decided
     blocks: [NexusInfra#6 T1]
 ```
 
@@ -62,19 +62,47 @@ decisions:
 
 ### 判断に必要な追加確認
 
-- edge networkにCaddyとpublic-api以外を参加させない方針を、Issue #6 T4のvalidator設計（`set(services) == {"public-api","caddy"}`）で担保されるか。担保されれば案Aのリスクは小さい。
-- Studio（Issue #9）を同じCaddyに追加したとき、`studio-api`も同じedgeに入り、`ReverseProxy__TrustedNetwork`に同じsubnetを使う予定である点。
+- 設計確認済み（2026-10-18）: [Issue #6 T4](https://github.com/m0o9l0v3/NexusInfra/issues/6)はサービス集合を`{"public-api", "caddy"}`に限定し、各サービスの接続networkも検査する。今回validatorと拒否テストを実装した。実networkの参加状態は運用時に別途確認する。
+- 採用するCaddy版・digestで、受信した偽装`X-Forwarded-*`が信頼されず、接続元IPを基に転送されることを隔離環境で確認する。[Caddy公式資料](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#defaults)は既定で受信値を無視すると説明しているが、採用イメージでの実行確認は未完了。
+- 起動時にedgeの実参加コンテナを確認する手順を定める。静的validatorでは運用中の手動接続までは防げない。
+- [Issue #9](https://github.com/m0o9l0v3/NexusInfra/issues/9)でStudioを同じCaddyに追加する前に、案Bまたはnetwork分離を含めて信頼範囲を再判断する。同じsubnetをそのまま信頼することは今回の決定に含めない。
 
 ### 決定
 
 ```yaml
 id: DEC-1
-status: open        # decided にする
-choice:             # A / B
-decided_on:
-decided_by:         # 人間の名前（AIの提案は根拠欄に書く）
+status: decided
+choice: A
+decided_on: 2026-10-18
+decided_by: m0o9l0v3
 rationale:
-follow_up:          # 例: "#6 T1にenv追加、validator検査11に追加、#7で429の挙動を確認"
+  summary: "AI提案を人間が承認。初期API公開ではRateLimiting__KnownNetworks__0にPG17_EDGE_SUBNETを渡す。"
+  reasons:
+    - "CaddyのIPを使った全クライアント共通のrate limit枠を解消するため。"
+    - "既存envを再利用でき、Mobileの本番テンプレートと整合し、固定IP管理が不要なため。"
+  sources:
+    - "NexusMobile apps/admin-api/RateLimiting/RateLimitingExtensions.cs:33-46,67"
+    - "NexusMobile apps/public-api/Program.cs:83,96"
+    - "NexusMobile deploy/database/compose.production.yml:52"
+    - "NexusInfra #6 T4（サービス集合と接続networkの検査設計）"
+  conditions:
+    - "初期edgeへの参加はCaddyとpublic-apiのみとし、validatorで検査する。"
+    - "Studioなどのサービス追加前に信頼範囲を再判断する。"
+  remaining_risks:
+    - "subnet内の全接続元が信頼対象になる。"
+    - "静的検査では運用中の手動network接続を防げない。"
+follow_up:
+  file_changes:
+    - "compose.pg17-edge.yaml: public-apiにRateLimiting__KnownNetworks__0: ${PG17_EDGE_SUBNET}を追加（ローカル実装済み、未レビュー）。"
+    - "scripts/validate-pg17-edge.py: rawではenv参照、resolvedではedge subnetとの一致、参加サービスと接続networkを検査（ローカル実装済み、未レビュー）。"
+    - "tests/test_validate_pg17_edge.py: 設定欠落・subnet不一致・追加サービスのedge参加を拒否するテスト（ローカル実装済み、未レビュー）。"
+    - "docs/pg17-public-edge.md §6: 採用条件と残る確認を記載。"
+    - "docs/pg17-baseline.md §4: クライアント別の制限枠・429・偽装ヘッダーの確認を記載。"
+  issue_updates_pending:
+    - "#6 T1・T4・T5に採用内容を反映する。"
+    - "#7に採用イメージでの確認項目と実行結果を記録する。"
+    - "PG18 compose.yamlの同種問題は別Issueで扱う。"
+  application_status: "Compose・validator・テストをローカル実装済み。採用digestによるAPI隔離検証・本番適用は未実施。"
 ```
 
 ### 決定後に更新する箇所
@@ -109,24 +137,52 @@ Issue #7（隔離検証）と本番で使うpublic-apiのimmutable digestを、�
 
 ### 判断に必要な追加確認
 
-- NexusMobileのGitLabミラーで、現在もパイプラインが動いているか（`develop` `6459abd`の`public-api-image`が成功しているか）。
-- GHCRのパッケージをpublicにしてよいか（public-apiのイメージに秘密は含まれない設計: `deploy/README-production-images.md`）。publicなら、VPSのpull資格は不要になる。
-- VPSのアーキテクチャ。arm64の場合、案A（kaniko）はrunnerの対応が必要。
+- VPSのOS・CPUアーキテクチャをPart 0で確認し、`target_platform`を確定する。確認前にplatformを推測して採用digestを決めない。
+- 提案名`ghcr.io/m0o9l0v3/nexus-public-api`の利用可否、既存パッケージとの競合、Mobileのworkflowから発行できる権限を確認する。
+- PAT発行アカウントが対象パッケージの読み取り権限を持つこと、PAT（classic）がアカウント・組織の認証方針で利用できることを確認する。必要な場合はSSO承認も確認する。
+- 発行対象のブランチ・commit、レビュー済みcommitの採用手順、digest・発行ジョブ・provenance/attestationの保存方法と期間を確定する。
+- 初期はprivateとする。将来publicに変更する場合は、公開してよい成果物かを別途判断する。GitLab経路の稼働確認は案B採用の前提とせず、暫定利用を検討する場合に限って行う。
+
+認証方式の出典（2026-10-18確認）: [GitHub公式資料](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)。workflowからの発行には`GITHUB_TOKEN`、VPSからのprivateイメージ取得にはPAT（classic）の`read:packages`を使用する。publicイメージは匿名取得できる。これは仕様確認であり、対象パッケージの権限・実際の取得可否は未検証。
 
 ### 決定
 
 ```yaml
 id: DEC-2
-status: open
-choice:             # A / B（Cは#7隔離専用の暫定としてのみ）
-registry:           # 例: ghcr.io/m0o9l0v3/nexus-public-api
-visibility:         # public / private
-vps_pull_auth:      # なし / 読み取り専用token（種類）
-target_platform:    # linux/amd64 / linux/arm64（Part 0の結果）
-decided_on:
-decided_by:
+status: decided
+choice: B
+registry: ghcr.io/m0o9l0v3/nexus-public-api # 提案名。利用可否は未確認
+visibility: private
+vps_pull_auth: "PAT（classic）、scopeはread:packagesのみ"
+target_platform:    # 未確認。Part 0の結果で確定し、採用digestと照合する
+decided_on: 2026-10-18
+decided_by: m0o9l0v3
 rationale:
-follow_up:          # 例: "NexusMobileにGHCR push workflowのPR、#5 §4・#7に経路を記録"
+  summary: "AI提案を人間が承認。GitHub Actionsからpublic-apiをGHCRへ発行し、初期はprivateとする。platformは確認後に確定する。"
+  reasons:
+    - "GitHub Primary・GitLab DRの方針に整合する。"
+    - "レビューしたcommit SHA・発行ジョブ・immutable digestを対応づけられる。"
+    - "公開可否が未決のままイメージを公開せずに進められる。"
+  sources:
+    - "本文DEC-2の事実: 現行GitLab発行経路とGitHub Primary方針"
+    - "https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry"
+  conditions:
+    - "CIの発行認証にはGITHUB_TOKENを使う。"
+    - "VPSには読み取り専用資格だけを置き、値をGitや文書に記録しない。"
+    - "採用commit・digest・platformを照合し、本番参照は@sha256:で固定する。"
+  remaining_risks:
+    - "Mobile側のworkflowはローカル実装済み。レビュー・環境設定・実行確認が必要。"
+    - "VPSの取得資格には期限・更新・失効管理が必要。"
+    - "digest固定だけでは、同じソースからの再build結果の一致までは保証しない。"
+follow_up:
+  file_changes:
+    - "NexusMobile .github/workflows/public-api-image.yml（新規案）: 発行条件・platform・GHCR push・digestと証跡の記録（ローカル実装済み、未レビュー）。"
+    - "NexusMobile deploy/README-production-images.md: 発行経路・採用手順・取得認証を追記（ローカル実装済み、Mobile別PRでレビュー）。"
+    - "NexusInfra docs/pg17-public-edge.md §4: GHCR経路と採用条件を記載。"
+    - "NexusInfra docs/pg17-operator-checklist.md D1・D2・V4: GHCR認証とplatform照合に対応。"
+  issue_updates_pending:
+    - "#5 §4・#7に採用経路を反映し、採用commit・digest・発行ジョブURLを記録する。"
+  application_status: "workflow・発行ガード・証跡出力をMobileにローカル実装済み。platform・パッケージ利用可否は未確認。資格発行・イメージ発行・VPS操作・本番適用は未実施。"
 ```
 
 ### 決定後に更新する箇所
@@ -147,7 +203,7 @@ follow_up:          # 例: "NexusMobileにGHCR push workflowのPR、#5 §4・#7�
 - CORSが効くのはブラウザだけ。iOSネイティブアプリ（`apps/nexus-ios`）の要求はCORSの影響を受けない。
 - PG18用`compose.yaml:31`とIssue #6 T1は`https://${API_DOMAIN}`を設定している。これはAPI自身のoriginで、同一originの要求にはCORSが不要なため、**実質的に何も許可していない**のと同じ（害もない）。
 - Mobileのテンプレートは`Cors__AllowedOrigins__0: ${NEXUS_PUBLIC_ORIGIN:?Set the HTTPS public origin}`（`deploy/database/compose.production.yml:51`）で、1つのorigin指定を必須にしている。
-- `web/`（イベント告知LP、NexusMobile #81で再構成中）は`VITE_API_BASE_URL`（`web/src/api/client.ts:9`）でAPIを呼ぶクライアントを持っている。LPがpublic-apiをブラウザから呼ぶかどうか、呼ぶ場合のLPのドメインは#81で未確定。
+- `web/`は`VITE_API_BASE_URL`（`web/src/api/client.ts:9`）を使うfetchクライアントを持つ。[NexusMobile #81](https://github.com/m0o9l0v3/NexusMobile/issues/81)はclosedで、LPの動的データを当日イベント一覧に必要な範囲でpublic-apiと結合する方針と、`GET /api/events/today`の実装・検証を記載している（2026-10-18確認）。closedという状態だけでは本番公開・結合検証済みとは判断しない。ブラウザから直接呼ぶか、LPの公開originは今回の確認では未確定。
 - 管理ポータル`apps/admin-web`はadmin-api（`VITE_ADMIN_API_BASE_URL`）を呼ぶため、public-apiのCORSとは無関係。
 - 公開GET（`/api/spots/public`、`/api/events/today`など）は公開情報だが、`POST /api/logs`は匿名の参加者ログを受け付ける。originを広く許可すると、第三者のサイトからブラウザ経由でログを投げられる（rate limitはIP単位で効く）。
 
@@ -161,20 +217,49 @@ follow_up:          # 例: "NexusMobileにGHCR push workflowのPR、#5 §4・#7�
 
 ### 判断に必要な追加確認
 
-- NexusMobile #81で、LPがpublic-apiをブラウザから直接呼ぶか（呼ばずに静的データやiOSへの導線だけか）。
-- LPを公開するドメインと、そのHTTPS運用（HSTSの`includeSubDomains`の再検討、Issue #9にも関係）。
+- LPの正確なHTTPS originと、APIへの接続構成（ブラウザから直接呼ぶか、同一originの中継を使うか）。#81にAPI利用方針があるため、「LPはAPIを使わない」とは扱わない。
+- LPとAPIを同時公開する必要があるか。別originから直接呼ぶLPを同時公開する場合は、公開前にoriginを確定し案Bを再判断する。
+- LP接続時に、現行CORSポリシーの任意method許可を維持してよいか。originの許可はGET専用の許可ではない。
+- LPのHTTPS運用（HSTSの`includeSubDomains`の再検討、Issue #9にも関係）。
 
 ### 決定
 
 ```yaml
 id: DEC-3
-status: open
-choice:             # A / B
-allowed_origins: [] # 例: ["https://api.nexus-app.jp"] または LPのorigin
-decided_on:
-decided_by:
+status: decided
+choice: A
+allowed_origins:
+  - "https://${PG17_EDGE_API_DOMAIN}" # 実行時にAPIのHTTPS originへ展開
+decided_on: 2026-10-18
+decided_by: m0o9l0v3
 rationale:
-follow_up:          # 例: "#6 T1のenv名と値を確定、validatorで https:// 以外と * を拒否"
+  summary: "AI提案を人間が承認。初期API公開は案Aとし、別originのLP接続前に案Bを再判断する。"
+  reasons:
+    - "iOSネイティブの要求はCORSの影響を受けない。"
+    - "未確認のLP originを推測して許可しない。"
+    - "初期構成ではAPI自身のHTTPS origin指定を維持できる。"
+  sources:
+    - "NexusMobile apps/public-api/Program.cs: CORSの許可origin設定と適用"
+    - "https://github.com/m0o9l0v3/NexusMobile/issues/81"
+    - "NexusMobile web/src/api/client.ts: VITE_API_BASE_URLを使ったfetch"
+  conditions:
+    - "別originのLPがAPIを直接呼ぶ場合、接続開始前にそのHTTPS originを確定して案Bを再判断する。"
+    - "ワイルドカードは許可しない。"
+  remaining_risks:
+    - "案Aのままでは別originのLPからAPIレスポンスを読み取れない。"
+    - "将来LPのoriginを許可すると、現行ポリシーはGET以外のmethodも許可する。"
+follow_up:
+  file_changes:
+    - "compose.pg17-edge.yaml: Cors__AllowedOrigins__0をAPI自身のHTTPS originに設定（ローカル実装済み、未レビュー）。"
+    - ".env.pg17-edge.example: 初期はLP用origin変数を追加しない（ローカル実装済み、未レビュー）。"
+    - "scripts/validate-pg17-edge.py: rawのenv参照とresolvedのAPI origin一致、HTTPS、ワイルドカード不使用を検査（ローカル実装済み、未レビュー）。"
+    - "tests/test_validate_pg17_edge.py: 正常例と不正originの拒否を検証（ローカル実装済み、未レビュー）。"
+    - "docs/pg17-public-edge.md §6: 初期構成とLP接続前の再判断条件を記載。"
+    - "docs/pg17-operator-checklist.md D4: 同じ条件を反映。"
+  issue_updates_pending:
+    - "#6 T1・T3・T4・T5へ設定と検査条件を反映する。"
+    - "#7へ初期構成のCORS確認項目と結果を記録する。"
+  application_status: "Compose・validator・テストをローカル実装済み。LP origin・接続構成は未確認。採用digestによるブラウザ検証・本番適用は未実施。"
 ```
 
 ### 決定後に更新する箇所

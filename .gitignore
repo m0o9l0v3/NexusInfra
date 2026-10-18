@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.env.pg17-edge.example
 *.dump
 *.sql
 *.tar

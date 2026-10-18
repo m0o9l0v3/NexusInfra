@@ -29,6 +29,9 @@ jobs:
       - run: python tests/test_pg17_baseline.py
       - run: python scripts/validate-secrets.py
       - run: sh -n scripts/*.sh
+      - run: python scripts/validate-pg17-edge.py
+      - run: python scripts/validate-pg17-edge.py --isolation
+      - run: python tests/test_validate_pg17_edge.py
 
   compose-config:
     runs-on: ubuntu-latest
@@ -50,9 +53,33 @@ jobs:
           export PG17_BASELINE_PROJECT=nexus-pg17-baseline-ci PG17_BASELINE_VOLUME=nexus-pg17-baseline-ci-db PG17_BASELINE_IMAGE="example/postgres17@sha256:$review_digest" PG17_BASELINE_PASSWORD_FILE=/private/disposable-secrets/baseline_password PG17_BASELINE_SECRET_DIR=/private/disposable-secrets
           python3 scripts/pg17-baseline.py preflight
           docker compose -f compose.pg17-baseline.yml config --quiet
+      - run: python3 -m pip install PyYAML==6.0.3
+      - name: Validate PG17 edge and reject PG18 composition
+        shell: bash
+        run: |
+          review_digest=$(printf '%064d' 0)
+          export PG17_EDGE_PUBLIC_API_IMAGE="example/public@sha256:$review_digest" PG17_EDGE_CADDY_IMAGE="example/caddy@sha256:$review_digest"
+          export PG17_EDGE_API_DOMAIN=api.example.invalid PG17_EDGE_ACME_EMAIL=ops@example.invalid PG17_EDGE_BACKEND_NETWORK=reviewed-pg17-network PG17_EDGE_SUBNET=172.30.251.0/28 PG17_EDGE_SECRET_DIR=/private/disposable-secrets
+          python3 scripts/validate-pg17-edge.py --env
+          docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml config --quiet
+          docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml config --format json > "$RUNNER_TEMP/edge.json"
+          python3 scripts/validate-pg17-edge.py --resolved "$RUNNER_TEMP/edge.json" --env
+          # Supply PG18's required variables only for config resolution; never start it.
+          export NEXUS_POSTGRES_IMAGE="$PG17_EDGE_PUBLIC_API_IMAGE" PUBLIC_API_IMAGE="$PG17_EDGE_PUBLIC_API_IMAGE" ADMIN_API_IMAGE="$PG17_EDGE_PUBLIC_API_IMAGE" STUDIO_API_IMAGE="$PG17_EDGE_PUBLIC_API_IMAGE" STUDIO_WEB_IMAGE="$PG17_EDGE_PUBLIC_API_IMAGE" CADDY_IMAGE="$PG17_EDGE_CADDY_IMAGE"
+          export NEXUS_DB_VOLUME=reviewed-db-volume NEXUS_BACKUP_VOLUME=reviewed-backup-volume NEXUS_EDGE_SUBNET=172.30.250.0/28 NEXUS_SECRET_DIR=/private/secrets NEXUS_REPO_DIR=/private/nexus API_DOMAIN=api.example.invalid STUDIO_DOMAIN=studio.example.invalid ACME_EMAIL=ops@example.invalid BACKUP_DIR=/private/backup
+          docker compose -p nexus-edge-pg17 -f compose.yaml -f compose.pg17-edge.yaml config --format json > "$RUNNER_TEMP/merged.json"
+          if python3 scripts/validate-pg17-edge.py --resolved "$RUNNER_TEMP/merged.json"; then
+            echo 'PG18 composition was incorrectly accepted' >&2
+            exit 1
+          fi
+          export PG17_EDGE_ISO_PROJECT=nexus-pg17-edge-iso-ci PG17_EDGE_ISO_NETWORK=nexus-pg17-edge-iso-ci-backend PG17_EDGE_ISO_VOLUME=nexus-pg17-edge-iso-ci-db PG17_EDGE_ISO_DB_IMAGE="example/postgres17@sha256:$review_digest" PG17_EDGE_ISO_PASSWORD_FILE=/private/disposable-secrets/isolation_password
+          python3 scripts/validate-pg17-edge.py --isolation --env
+          docker compose -p "$PG17_EDGE_ISO_PROJECT" -f compose.pg17-edge-isolation.yml config --format json > "$RUNNER_TEMP/isolation.json"
+          python3 scripts/validate-pg17-edge.py --isolation --resolved "$RUNNER_TEMP/isolation.json" --env
 
   caddy-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker run --rm -v "$PWD:/src" -w /src -e API_DOMAIN=api.example.invalid -e STUDIO_DOMAIN=studio.example.invalid -e ACME_EMAIL=ops@example.invalid caddy:2 caddy validate --config Caddyfile --adapter caddyfile
+      - run: docker run --rm -v "$PWD:/src" -w /src -e API_DOMAIN=api.example.invalid -e ACME_EMAIL=ops@example.invalid caddy:2 caddy validate --config Caddyfile.pg17-api --adapter caddyfile

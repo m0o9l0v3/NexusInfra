@@ -10,7 +10,7 @@
 - public image digest（`@sha256:`）とMobile commit SHAは秘密ではないので、#7の記録に使ってよい。
 - VPSでは読み取りのみ。`docker compose up/down/restart/stop/rm`、DBへの書込み、パケットフィルター変更、timer登録、`docker pull`はしない。
 
-D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で別に決める。
+D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で方針決定済み。実装はローカルで追加済みだが採用digestによる結合検証は未完了で、platform・LP origin等の未確認事項は各DECと本書の手順に従って確認する。
 
 所要の目安: Part 0は5分、Part 1は判断待ちを除き30分、Part 2は1時間程度。
 
@@ -30,10 +30,10 @@ docker version --format '{{.Server.Os}}/{{.Server.Arch}}'
 
 | # | 決めること | 具体的な作業 | 記録 | 止める条件 |
 | --- | --- | --- | --- | --- |
-| D1 | public-apiのdigest発行経路 | NexusMobileのGitLab CIで、採用するcommit（現時点の候補は`develop` `6459abd`）の`public-api-image`ジョブが成功しているか確認し、成果物`image-digests/public-api.txt`の`registry/path@sha256:...`を取得する。GitLab CIが止まっている場合は (a) GitLab CIを再稼働する か (b) Mobile側にGitHub Actionsからのregistry pushを追加する（Mobileの別PR）かを決める | 採用commit SHA、digest、ジョブURL、選んだ経路 | digestが`@sha256:`でない、commitがAPI/DB変更を含むのに未レビュー |
-| D2 | VPSからのpull認証 | D1のregistryに対する**読み取り専用**の資格（GitLabならscope `read_registry`のdeploy token）を発行するか決める。保存先はVPSのroot用docker設定に限る | 発行の有無・失効日（値は書かない） | 書込み権限付きの資格しか用意できない |
+| D1 | public-apiのdigest発行経路 | DEC-2案B決定済み。Mobileの別PRでGitHub Actions → GHCR（初期private）の発行経路を整備する。提案パッケージ名の利用可否・発行権限を確認し、レビュー済みcommitの発行ジョブとdigestを取得する。workflowはローカル実装済み・未実行のため、決定や実装のみでdigest取得済みとしない | 採用commit SHA、digest、ジョブURL、選んだ経路 | workflow未レビュー・未実行、digestが`@sha256:`でない、採用commitが未レビュー |
+| D2 | VPSからのpull認証 | GHCR取得には**読み取り専用**PAT（classic）、scope `read:packages`のみを使用する。発行アカウントのパッケージ読み取り権限、認証方針、必要な場合はSSO承認を確認する。CIの発行には別途`GITHUB_TOKEN`を使う。VPSでの保存先はroot用docker設定に限る。資格発行・配置は未実施 | 発行の有無・失効日・更新方法（値は書かない） | 書込み権限付き資格、classic PAT利用不可、対象パッケージへの読み取り権限なし |
 | D3 | Caddyのdigest | Macで`docker buildx imagetools inspect caddy:<採用する2.x版>`を実行し、index digestと、その一覧にPart 0の「VPSのplatform」の行があることを確認する | 版、digest | VPSのplatformのmanifestが無い |
-| D4 | CORS origin | ブラウザから`api.nexus-app.jp`を呼ぶWebページがあるか決める。iOSアプリだけならCORSは使われない。ある場合はそのHTTPS origin（例 `https://<web>.nexus-app.jp`）を1つずつ列挙する | 許可origin一覧（または「ブラウザ利用なし」） | 「`*`」や`http://`のoriginが必要と言われる |
+| D4 | CORS origin | DEC-3案A決定済み。初期はAPI自身のHTTPS originのみ。LPには当日イベント一覧のAPI利用方針があるため、originと接続構成を確認し、別originから直接接続する前に案Bを再判断する。同時公開なら再判断も公開前に完了する。任意method許可の妥当性も確認する | 展開後の許可origin一覧、LP接続前の再判断要否と結果 | ワイルドカード・HTTP origin、別originのLPが必要なのに設定変更・ブラウザ検証が未完了 |
 | D5 | ACMEと証明書失敗時の対応 | ACME連絡先メールを決める。HTTP-01が失敗したら`nexus-edge-pg17`だけを`-p`明示で`stop`し、DNS・80番の到達性を直してから再開する、と合意する（Let's Encryptは失敗が続くと一時的に発行を制限するため、何度も再試行しない） | メール（私有メモ）、合意日 | 80番を外部から開けられない |
 | D6 | rate limitと監視 | 既定値（`POST /api/logs` 60回/60秒、`/batch` 12回/60秒、GETは制限なし）で良いか決める。死活（`/health`）、証明書期限、ディスクを何で監視するか決める | 採否、監視方法 | — |
 
@@ -83,7 +83,7 @@ docker exec --user postgres <PG17_CONTAINER> psql -U nexus -d nexus -c "SELECT c
 
 ### V4. registry到達とplatformの照合（§4）
 
-アーキテクチャはPart 0で確認済み。ここではD1のdigestに到達でき、そのdigestがVPSのplatform向けであることを確かめる。
+アーキテクチャをPart 0で確認してから実施する（現時点では未確認）。DEC-2で採用したGHCRのprivateパッケージについて、D1のdigestにD2の読み取り専用資格で到達でき、そのdigestがVPSのplatform向けであることを確かめる。DEC-2の決定だけでは、発行・認証・platform照合の合格とはしない。
 
 ```sh
 sudo sh -c 'test -f /root/.docker/config.json && grep -o "\"[^\"]*\": *{" /root/.docker/config.json | cut -d\" -f2'   # 登録済みregistryのホスト名だけ

@@ -1,5 +1,7 @@
 # 初回導入と更新（人間の承認後）
 
+本書はPG18用。現行PG17公開レイヤーには適用不可 → [PG17公開レイヤー](pg17-public-edge.md)。
+
 ## 適用前の事実確認
 
 現行VPSはPostgreSQL 17で、次期Composeは18用である。まず[17→18の移行gate](transition-postgres-17-to-18.md)を満たす。現行17のvolumeを本ComposeのDB volumeに指定して起動しない。

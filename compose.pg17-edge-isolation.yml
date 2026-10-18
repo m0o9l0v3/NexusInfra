@@ -1,0 +1,32 @@
+# Disposable PG17 only; never combine with the edge or PG18 Compose files.
+# Shares a named internal network with the separate edge project, not the live database.
+name: ${PG17_EDGE_ISO_PROJECT:?set a unique disposable project}
+services:
+  postgres:
+    image: ${PG17_EDGE_ISO_DB_IMAGE:?pin the reviewed PG17 digest}
+    restart: "no"
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_DB: nexus
+      POSTGRES_PASSWORD_FILE: /run/secrets/isolation_password
+    secrets: [isolation_password]
+    networks:
+      backend:
+        aliases: [pg17-isolation-db]
+    volumes: [isolation_db:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U nexus -d nexus"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+networks:
+  backend:
+    name: ${PG17_EDGE_ISO_NETWORK:?set a disposable network name}
+    internal: true
+volumes:
+  isolation_db:
+    external: true
+    name: ${PG17_EDGE_ISO_VOLUME:?identify a new empty disposable volume}
+secrets:
+  isolation_password:
+    file: ${PG17_EDGE_ISO_PASSWORD_FILE:?private absolute path outside Git}

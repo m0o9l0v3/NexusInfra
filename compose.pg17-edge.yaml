@@ -1,0 +1,60 @@
+# Standalone API edge; never combine with compose.yaml. No database lifecycle is owned here.
+name: nexus-edge-pg17
+services:
+  public-api:
+    image: ${PG17_EDGE_PUBLIC_API_IMAGE:?pin a reviewed image digest}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      DatabaseProvider: postgresql
+      ConnectionStrings__PublicApiReadOnlyFile: /run/secrets/public_connection
+      AuditLog__HashKeyFile: /run/secrets/audit_key
+      RateLimiting__KnownNetworks__0: ${PG17_EDGE_SUBNET:?set the reviewed edge subnet}
+      Cors__AllowedOrigins__0: https://${PG17_EDGE_API_DOMAIN:?set the API domain}
+    secrets: [public_connection, audit_key]
+    networks: [backend, edge]
+    healthcheck:
+      test: [CMD, /app/healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: &logs
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  caddy:
+    image: ${PG17_EDGE_CADDY_IMAGE:?pin a reviewed image digest}
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_DOMAIN: ${PG17_EDGE_API_DOMAIN:?set the API domain}
+      ACME_EMAIL: ${PG17_EDGE_ACME_EMAIL:?set the ACME contact}
+    volumes:
+      - ./Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge, public]
+    depends_on: {public-api: {condition: service_healthy}}
+    healthcheck:
+      test: [CMD, caddy, validate, --config, /etc/caddy/Caddyfile]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    logging: *logs
+networks:
+  backend:
+    external: true
+    name: ${PG17_EDGE_BACKEND_NETWORK:?inspect the live PG17 network name}
+  edge:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${PG17_EDGE_SUBNET:?set the reviewed edge subnet}
+  public: {}
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+secrets:
+  public_connection:
+    file: ${PG17_EDGE_SECRET_DIR:?private directory}/public_connection
+  audit_key:
+    file: ${PG17_EDGE_SECRET_DIR:?private directory}/audit_key
