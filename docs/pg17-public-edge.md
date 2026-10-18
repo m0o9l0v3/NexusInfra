@@ -209,7 +209,7 @@ Internet → Caddy（host TCP 80/443のみ）→ public-api:8080 → 既存PG17�
 | `PG17_EDGE_SUBNET` | 既存network/経路と重複しないprivate IPv4 /24〜/28。KnownNetworksにも同じ値（DEC-1） |
 | `PG17_EDGE_SECRET_DIR` | 秘密ファイルを保管する絶対パス |
 
-validatorは初期構成の閉じた契約を検査する。追加のサービス・env override・command/entrypoint・network override・任意のCaddyディレクティブを許可しない。raw YAMLでは必須env参照、展開JSONではdigest形式・subnet・origin・マウントを検査する。改行や空白だけのCaddy整形は許可するが、機能変更にはvalidatorも含めたレビューが必要。静的検査は実networkへの手動参加や秘密の内容・DB権限・イメージの正当性を検証しない。
+validatorは初期構成の閉じた契約を検査する。追加のサービス・env override・command/entrypoint・network override・任意のCaddyディレクティブを許可しない。raw YAMLでは必須env参照、展開JSONではdigest形式・subnet・origin・マウントを検査する。Caddyfileのマウント元はComposeファイルのディレクトリ基準で解決し、`--caddyfile`（既定はrepo直下）の検査対象と同一の実ファイルであることを確認する。同名の別ファイルは許可しない。Caddy整形ではトークン間の空白・コメントだけを無視し、引用符内のヘッダー値や空白は保持して比較する。機能変更にはvalidatorも含めたレビューが必要。静的検査は実networkへの手動参加や秘密の内容・DB権限・イメージの正当性を検証しない。
 
 ## 9. 秘密ファイルと導入前提
 

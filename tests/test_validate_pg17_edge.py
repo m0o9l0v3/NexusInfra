@@ -36,10 +36,18 @@ def run(data=None, *, resolved=None, caddy=CADDY, env=None, isolation=False, acc
         folder = Path(tmp)
         compose = folder / "compose.yml"
         compose.write_text(yaml.safe_dump(data if data is not None else (ISO if isolation else RAW)))
-        caddyfile = folder / "Caddyfile"
+        caddyfile = folder / "Caddyfile.pg17-api"
         caddyfile.write_text(caddy)
         cmd = [sys.executable, str(SCRIPT), "--compose", str(compose), "--caddyfile", str(caddyfile)]
         if resolved is not None:
+            resolved = copy.deepcopy(resolved)
+            # A concrete fixture uses the repository's source path. Relocate it
+            # with this temporary Compose project, without rewriting other paths.
+            for service in resolved.get("services", {}).values():
+                mounts = service.get("volumes", [])
+                for i, mount in enumerate(mounts):
+                    if mount == f"{ROOT / 'Caddyfile.pg17-api'}:/etc/caddy/Caddyfile:ro":
+                        mounts[i] = f"{caddyfile}:/etc/caddy/Caddyfile:ro"
             path = folder / "resolved.json"
             path.write_text(json.dumps(resolved))
             cmd += ["--resolved", str(path)]
@@ -70,6 +78,7 @@ def resolved_fixture(data=RAW):
     text = re.sub(r"\$\{([A-Z0-9_]+)(?::\?[^}]+)?\}", lambda m: ENV[m[1]], text)
     doc = yaml.safe_load(text)
     if data is RAW:
+        doc["services"]["caddy"]["volumes"][0] = f"{ROOT / 'Caddyfile.pg17-api'}:/etc/caddy/Caddyfile:ro"
         for kind in ("networks", "volumes"):
             for key, val in doc[kind].items():
                 if "name" not in val:
@@ -77,7 +86,39 @@ def resolved_fixture(data=RAW):
     return doc
 
 
+def test_mount_identity():
+    """The file inspected must be the file mounted, including with --caddyfile."""
+    global count
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        checked = folder / "Caddyfile.pg17-api"
+        checked.write_text(CADDY)
+        other = folder / "other" / "Caddyfile.pg17-api"
+        other.parent.mkdir()
+        other.write_text(CADDY + "\n{$STUDIO_DOMAIN} { reverse_proxy studio-api:8080 }\n")
+        compose = folder / "compose.yml"
+        def invoke(source, inspected, accept):
+            data = changed(["services", "caddy", "volumes"], [
+                source + ":/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"])
+            compose.write_text(yaml.safe_dump(data))
+            result = subprocess.run([sys.executable, str(SCRIPT), "--compose", str(compose),
+                                     "--caddyfile", str(inspected)], capture_output=True, text=True)
+            assert (result.returncode == 0) == accept, result.stderr
+            assert "Traceback" not in result.stderr, result.stderr
+        invoke("./Caddyfile.pg17-api", checked, True)
+        invoke(str(other), checked, False)
+        invoke("./other/Caddyfile.pg17-api", checked, False)
+        invoke(str(other), other, False) # Inspecting the actual mounted file rejects its extra route.
+        other.write_text(CADDY)
+        invoke(str(other), other, True) # An explicitly selected file must still be the mounted file.
+        link = folder / "link"
+        link.symlink_to(other.parent, target_is_directory=True)
+        invoke("./link/Caddyfile.pg17-api", checked, False)
+        count += 6
+
+
 def main():
+    test_mount_identity()
     run(accept=True)
     run(env={}, accept=True)
     run(isolation=True, env={}, accept=True)
@@ -110,6 +151,7 @@ def main():
         (["services", "caddy", "networks"], ["edge", "public", "backend"]),
         (["services", "caddy", "volumes"], ["nexus_postgres_data:/var/lib/postgresql/data"]),
         (["services", "caddy", "volumes"], ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]),
+        (["services", "caddy", "volumes"], ["/private/tmp/other/Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]),
         (["services", "caddy", "volumes"], ["./Caddyfile.pg17-api:/etc/caddy/Caddyfile", "caddy_data:/data", "caddy_config:/config"]),
         (["networks", "backend", "external"], False),
         (["networks", "edge", "internal"], False),
@@ -131,6 +173,7 @@ def main():
         (["networks", "edge", "ipam", "config"], [{"subnet": "8.8.8.0/28"}]),
         (["networks", "backend", "name"], "nexus-production_db"),
         (["services", "caddy", "image"], "caddy:2"),
+        (["services", "caddy", "volumes"], ["/private/tmp/other/Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]),
     ]:
         run(resolved=changed(path, value, resolved))
     for key, value in [
@@ -146,6 +189,13 @@ def main():
         run(caddy=CADDY + extra)
     run(caddy=CADDY.replace("reverse_proxy public-api:8080", "reverse_proxy public-api:8080 { trusted_proxies private_ranges }"))
     run(caddy=CADDY.replace("max-age=31536000", "max-age=31536000; includeSubDomains"))
+    run(caddy=CADDY.replace('"DENY"', '"D E N Y"'))
+    run(caddy=CADDY.replace('"DENY"', '"DE\nNY"'))
+    run(caddy=CADDY.replace('"DENY"', '"DENY#invalid"'))
+    run(caddy=CADDY.replace('"DENY"', '"DENY'))
+    run(caddy=CADDY.replace('"max-age=31536000"', '"max-age =31536000"'))
+    run(caddy=CADDY.replace("X-Frame-Options", "X -Frame-Options"))
+    run(caddy=CADDY.replace("    ", "\t").replace("import headers", "import   headers # formatting only"), accept=True)
     merged = yaml.safe_load((ROOT / "compose.yaml").read_text())
     for key in ("services", "networks", "volumes", "secrets"):
         merged.setdefault(key, {}).update(copy.deepcopy(RAW[key]))

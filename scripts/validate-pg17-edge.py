@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 
 import yaml
@@ -95,7 +96,17 @@ def ports_of(service):
     return result
 
 
-def validate(data, resolved=False, isolation=False):
+def caddy_tokens(text):
+    # Keep quoted literals intact (including spaces and '#'); only normalize
+    # whitespace/comment formatting between tokens. This is a closed contract,
+    # not a general-purpose Caddyfile parser.
+    lexer = shlex.shlex(text, posix=False)
+    lexer.whitespace_split = True
+    lexer.quotes = '"'
+    return list(lexer)
+
+
+def validate(data, resolved=False, isolation=False, *, compose_dir=ROOT, caddyfile=ROOT / "Caddyfile.pg17-api"):
     errors = []
 
     def check(condition, message):
@@ -146,7 +157,13 @@ def validate(data, resolved=False, isolation=False):
           "caddy mounts must be exactly the API config and two ACME volumes")
     for source, target, read_only in mounts:
         if target == "/etc/caddy/Caddyfile":
-            check(Path(source).name == "Caddyfile.pg17-api" and read_only, "API Caddyfile must be mounted read-only")
+            source_path = Path(source)
+            check(not resolved or source_path.is_absolute(), "resolved Caddyfile mount source must be absolute")
+            if not source_path.is_absolute():
+                source_path = compose_dir / source_path
+            check(source_path.name == "Caddyfile.pg17-api" and read_only
+                  and source_path.resolve() == caddyfile.resolve(),
+                  "Caddyfile mount must be the exact file validated, mounted read-only")
         else:
             check(source == {"/data": "caddy_data", "/config": "caddy_config"}.get(target) and not read_only,
                   "ACME mount source must be project-scoped")
@@ -295,14 +312,16 @@ def main():
             continue
         try:
             data = json.loads(source.read_text()) if resolved else yaml.safe_load(source.read_text())
-            errors.extend(validate(data, resolved, args.isolation))
+            errors.extend(validate(data, resolved, args.isolation,
+                                   compose_dir=path.resolve().parent, caddyfile=args.caddyfile))
         except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError, yaml.YAMLError):
             errors.append("invalid Compose structure or unreadable input (values omitted)")
     if not args.isolation:
         try:
-            text = re.sub(r"(?m)#.*$", "", args.caddyfile.read_text())
-            if re.sub(r"\s+", "", text) != re.sub(r"\s+", "", CADDY_CONTRACT):
+            if caddy_tokens(args.caddyfile.read_text()) != caddy_tokens(CADDY_CONTRACT):
                 errors.append("Caddyfile must match the API-only forwarding/header/TLS contract")
+        except ValueError:
+            errors.append("Caddyfile contains an invalid quoted literal")
         except OSError:
             errors.append("Caddyfile is unreadable")
     if args.env:
