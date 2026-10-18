@@ -12,7 +12,19 @@
 
 D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で別に決める。
 
-所要の目安: Part 1は判断待ちを除き30分、Part 2は1時間程度。
+所要の目安: Part 0は5分、Part 1は判断待ちを除き30分、Part 2は1時間程度。
+
+## Part 0: 最初にVPSのアーキテクチャだけ確認する
+
+D1・D3でdigestが対応しているかを判断するために、Part 1より先に行う（読み取りのみ）。
+
+```sh
+uname -m
+docker version --format '{{.Server.Os}}/{{.Server.Arch}}'
+```
+
+- 期待値: `x86_64`と`linux/amd64`、または`aarch64`と`linux/arm64`の組。この`<OS>/<ARCH>`を以降の「VPSのplatform」として私有メモに記録する。
+- 止める条件: 2行の結果が対応しない、上記以外のアーキテクチャ。
 
 ## Part 1: VPSの外で決めること
 
@@ -20,7 +32,7 @@ D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-d
 | --- | --- | --- | --- | --- |
 | D1 | public-apiのdigest発行経路 | NexusMobileのGitLab CIで、採用するcommit（現時点の候補は`develop` `6459abd`）の`public-api-image`ジョブが成功しているか確認し、成果物`image-digests/public-api.txt`の`registry/path@sha256:...`を取得する。GitLab CIが止まっている場合は (a) GitLab CIを再稼働する か (b) Mobile側にGitHub Actionsからのregistry pushを追加する（Mobileの別PR）かを決める | 採用commit SHA、digest、ジョブURL、選んだ経路 | digestが`@sha256:`でない、commitがAPI/DB変更を含むのに未レビュー |
 | D2 | VPSからのpull認証 | D1のregistryに対する**読み取り専用**の資格（GitLabならscope `read_registry`のdeploy token）を発行するか決める。保存先はVPSのroot用docker設定に限る | 発行の有無・失効日（値は書かない） | 書込み権限付きの資格しか用意できない |
-| D3 | Caddyのdigest | Macで`docker buildx imagetools inspect caddy:<採用する2.x版>`を実行し、index digestと、VPSのCPUアーキテクチャ（V4）のmanifestがあることを確認する | 版、digest | VPSのアーキテクチャのmanifestが無い |
+| D3 | Caddyのdigest | Macで`docker buildx imagetools inspect caddy:<採用する2.x版>`を実行し、index digestと、その一覧にPart 0の「VPSのplatform」の行があることを確認する | 版、digest | VPSのplatformのmanifestが無い |
 | D4 | CORS origin | ブラウザから`api.nexus-app.jp`を呼ぶWebページがあるか決める。iOSアプリだけならCORSは使われない。ある場合はそのHTTPS origin（例 `https://<web>.nexus-app.jp`）を1つずつ列挙する | 許可origin一覧（または「ブラウザ利用なし」） | 「`*`」や`http://`のoriginが必要と言われる |
 | D5 | ACMEと証明書失敗時の対応 | ACME連絡先メールを決める。HTTP-01が失敗したら`nexus-edge-pg17`だけを`-p`明示で`stop`し、DNS・80番の到達性を直してから再開する、と合意する（Let's Encryptは失敗が続くと一時的に発行を制限するため、何度も再試行しない） | メール（私有メモ）、合意日 | 80番を外部から開けられない |
 | D6 | rate limitと監視 | 既定値（`POST /api/logs` 60回/60秒、`/batch` 12回/60秒、GETは制限なし）で良いか決める。死活（`/health`）、証明書期限、ディスクを何で監視するか決める | 採否、監視方法 | — |
@@ -37,12 +49,12 @@ docker ps --format '{{.ID}} {{.Names}} {{.Image}} {{.Status}}'
 docker inspect --type container --format '{{.Config.Image}} {{.Image}} {{.State.Health.Status}}' <PG17_CONTAINER>
 docker inspect --type container --format '{{range .Mounts}}{{.Type}} {{.Name}} {{.Destination}}{{"\n"}}{{end}}' <PG17_CONTAINER>
 docker exec --user postgres <PG17_CONTAINER> postgres --version
-docker image inspect --format '{{json .RepoDigests}}' postgres:17-alpine
+docker image inspect --format '{{json .RepoDigests}}' "$(docker inspect --type container --format '{{.Image}}' <PG17_CONTAINER>)"
 ```
 
 - 期待値: image `postgres:17-alpine`、health `healthy`、volume `nexus_postgres_data`が`/var/lib/postgresql/data`、`PostgreSQL 17.x`。
-- 最後の行の`postgres@sha256:...`は、#7の隔離検証で使うPG17 digest（`PG17_BASELINE_IMAGE`）として記録してよい。
-- 止める条件: image・volume・mount先・メジャーのどれかが違う、healthyでない。
+- 最後の行は、タグ`postgres:17-alpine`の現在の参照先ではなく、**稼働中コンテナが実際に使っているimage ID**のrepo digestを出す（起動後にタグが更新されていても取り違えない）。出た`postgres@sha256:...`を、#7の隔離検証で使うPG17 digest（`PG17_BASELINE_IMAGE`）として記録してよい。
+- 止める条件: image・volume・mount先・メジャーのどれかが違う、healthyでない、最後の行が空（`[]`）でdigestを特定できない。
 
 ### V2. network・alias・subnet・project名（§2）
 
@@ -69,17 +81,18 @@ docker exec --user postgres <PG17_CONTAINER> psql -U nexus -d nexus -c "SELECT c
 - 期待値: 自分の`psql`以外の接続が無い、または用途を説明できる。user table 0件（前回と同じ）。
 - 止める条件: 不明な接続元がある、user tableが増えている（baselineの前提が崩れる）。
 
-### V4. CPUアーキテクチャ・registry到達（§4）
+### V4. registry到達とplatformの照合（§4）
+
+アーキテクチャはPart 0で確認済み。ここではD1のdigestに到達でき、そのdigestがVPSのplatform向けであることを確かめる。
 
 ```sh
-uname -m
-docker version --format '{{.Server.Os}}/{{.Server.Arch}}'
 sudo sh -c 'test -f /root/.docker/config.json && grep -o "\"[^\"]*\": *{" /root/.docker/config.json | cut -d\" -f2'   # 登録済みregistryのホスト名だけ
-sudo docker manifest inspect <D1のdigest> >/dev/null && echo pull-auth-ok           # D1・D2確定後。取得はしない
+sudo docker manifest inspect --verbose <D1のdigest> | grep -E '"(architecture|os)"'   # D1・D2確定後。取得はしない
 ```
 
-- 期待値: `x86_64`（`linux/amd64`）または`aarch64`（`linux/arm64`）。D1・D3のdigestがそのアーキテクチャを含む。
-- 止める条件: アーキテクチャのmanifestが無い、registryに到達・認証できない。
+- 期待値: 最後のコマンドが成功し、出力された`os`/`architecture`の中にPart 0の「VPSのplatform」と同じ組がある。成功しただけ（digestが有効なだけ）では合格にしない。
+- `architecture`が出力されない場合は、Macで`docker buildx imagetools inspect <D1のdigest> --format '{{json .Image}}' | grep -o '"architecture":"[^"]*"'`を実行して照合する。
+- 止める条件: registryに到達・認証できない、VPSのplatformと同じ組が無い（例: arm64のVPSに対しamd64だけのdigest）。
 
 ### V5. 公開境界・DNS（§5）
 
@@ -138,6 +151,7 @@ Part 1・2がそろったら、Mac上の隔離検証（Claudeが実行可能）�
 
 ```md
 #5 VPS確認 YYYY-MM-DD 確認者: <名前>
+- Part 0 VPSのplatform: 確認済み/未
 - D1 digest経路: 合/否（経路: GitLab CI / GitHub Actions）
 - D2 pull認証: 合/否
 - D3 Caddy digest: 合/否

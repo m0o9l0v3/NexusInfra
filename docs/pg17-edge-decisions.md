@@ -95,7 +95,7 @@ Issue #7（隔離検証）と本番で使うpublic-apiのimmutable digestを、�
 - GitHub Actionsの`image-build-check`（`.github/workflows/ci.yml:91-95`）は`docker build`だけで、pushしない。
 - 両repoとも**GitHubがPrimary、GitLabはDRミラー**という方針。NexusInfraのREADMEは、GitLabへの直接pushや手動のIssue編集を避けるよう求めている。
 - イメージの基底は`mcr.microsoft.com/dotnet/aspnet:8.0`（タグ参照）で、実行ユーザーは`USER $APP_UID`（`apps/public-api/Dockerfile:20`、既定1654）。最終イメージのdigestが固定されれば再現性の問題はない。
-- VPSのCPUアーキテクチャは未確認（`docs/pg17-operator-checklist.md` V4）。kanikoの出力はrunnerと同じアーキテクチャの単一manifest。
+- VPSのCPUアーキテクチャは未確認（`docs/pg17-operator-checklist.md` Part 0で確認、V4でdigestと照合）。kanikoの出力はrunnerと同じアーキテクチャの単一manifest。
 - Caddyとpostgresの公式イメージは、Docker Hubのindex digestで固定する予定。
 
 ### 選択肢
@@ -122,7 +122,7 @@ choice:             # A / B（Cは#7隔離専用の暫定としてのみ）
 registry:           # 例: ghcr.io/m0o9l0v3/nexus-public-api
 visibility:         # public / private
 vps_pull_auth:      # なし / 読み取り専用token（種類）
-target_platform:    # linux/amd64 / linux/arm64（V4の結果）
+target_platform:    # linux/amd64 / linux/arm64（Part 0の結果）
 decided_on:
 decided_by:
 rationale:
