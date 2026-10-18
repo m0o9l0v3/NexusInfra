@@ -55,6 +55,9 @@ DB権限（`nexus_public`で接続）:
 - [ ] Caddy（`api.localhost`、内部CA）経由で`/health`と代表GET（`/api/spots/public`、`/api/events/today`）が200
 - [ ] Caddy経由の`POST /api/logs`が202を返し、`visit_logs`に行が増えてhash連鎖が続く
 - [ ] `RateLimiting__KnownNetworks__0`にedge subnetを渡し、rate limitがCaddy経由のクライアントIP単位で働く（全クライアントがCaddyのIPで1つの枠を共有しない）
+- [ ] [DEC-1案A（決定済み）](pg17-edge-decisions.md#dec-1-caddy越しのクライアントipとrate-limit): 設定値とedge subnetが一致し、edgeの実参加コンテナがCaddyとpublic-apiだけであることを確認する。Studio等の追加は信頼範囲の再判断後に行う
+- [ ] 異なる接続元IPを持つ2クライアントで、一方が制限超過して429になっても他方の制限枠が残ることを確認する。同じIPを共有するクライアントは区別しない
+- [ ] 採用Caddy版・digestで、クライアントが偽装した`X-Forwarded-For`・`X-Forwarded-Proto`を送っても、接続元IP・schemeの判定が偽装されず、rate limit枠を切り替えられないことを確認する
 - [ ] `docker image inspect --format '{{.Config.User}}'`の実行UIDと、そのUID所有0400のsecret（`public_connection`、`audit_key`）が読めること
 - [ ] public-api再起動後にDBへ再接続し、上記GETが再び成功する
 - [ ] Caddyがbackend networkに参加していない。host portは80/443のみ
