@@ -55,7 +55,7 @@ docker inspect --type container --format '{{index .Config.Labels "com.docker.com
 
 > 2026-10-01の確認結果: **NO-GO**。アプリDBは`nexus`（`nexus_admin`ではない）、roleは特権の`nexus`のみ、user table 0件。runtime用roleとschemaの構築は[pg17-baseline.md](pg17-baseline.md)で別承認とする。
 
-目的: public-apiが必要とするschema/権限があるか。**SELECTのみ。** 不足していてもrole作成・GRANTはここで行わず、別レビューにする。
+目的: public-apiが必要とするschema/権限があるか。**この確認で実行するのは参照用のSELECT照会のみ。** 不足していてもrole作成・GRANTはここで行わず、別レビューにする。
 
 DB名は未確定として扱う。**先に全DBを列挙して記録し**、アプリのDBを特定してから以降の`<APP_DB>`に使う（DB名は実在を確認するまで前提にしない（現行の確認結果は上記））。
 
@@ -76,16 +76,19 @@ docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "S
 docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT c.relkind, c.relname, has_table_privilege('<APP_ROLE>', c.oid, 'SELECT') AS sel, has_table_privilege('<APP_ROLE>', c.oid, 'INSERT') AS ins, has_table_privilege('<APP_ROLE>', c.oid, 'UPDATE') AS upd, has_table_privilege('<APP_ROLE>', c.oid, 'DELETE') AS del FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '<SCHEMA>' AND c.relkind IN ('r','v','m','p') ORDER BY 2"
 docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT c.relname, has_sequence_privilege('<APP_ROLE>', c.oid, 'USAGE') AS usage FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '<SCHEMA>' AND c.relkind = 'S' ORDER BY 1"
 docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT pg_get_userbyid(defaclrole) AS grantor, defaclobjtype, defaclacl FROM pg_default_acl"
+# visit_logsは列単位のSELECTなので、表単位のselは false が正しい。列ごとに見る
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT a.attname, has_column_privilege('<APP_ROLE>', a.attrelid, a.attnum, 'SELECT') AS sel FROM pg_attribute a WHERE a.attrelid = '<SCHEMA>.visit_logs'::regclass AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum"
+docker exec --user postgres <PG17_CONTAINER> psql -U <DB_USER> -d <APP_DB> -c "SELECT c.relname, c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '<SCHEMA>' AND c.relname IN ('spots','events')"
 ```
 
-パスワード付きの`\du+`出力や行データ（個人情報）は記録しない。read-only roleが適切かは、必要最小権限（`SELECT`のみ、書込み権限なし）との差で判断し、不足分の付与は別レビュー。
+パスワード付きの`\du+`出力や行データ（個人情報）は記録しない。runtime role（`nexus_public`）の適否は、[pg17-baseline.md](pg17-baseline.md) §3の**契約B**との差で判断する: `spots`/`events`はSELECTのみでRLS有効、`visit_logs`はINSERTと列`chain_id, created_at, hash`のSELECTのみ（`session_id`等のSELECT、UPDATE、DELETEは無し）、`__EFMigrationsHistory`はSELECTのみ、他の表は権限なし、特権属性なし。`visit_logs`のINSERTは契約どおりで不合格にしない。差分の修正・付与は別レビュー。
 
 | 項目 | 値 | 確認日 | 確認者 | 合否 |
 | --- | --- | --- | --- | --- |
 | 全DB一覧とアプリDB名（`<APP_DB>`） | | | | |
 | public-apiが必要とするschema | | | | |
 | 既存role（名前のみ） | | | | |
-| `<APP_ROLE>`の実効権限（CONNECT/USAGE/表・sequence、default ACL）と、read-only roleが必要か | | | | |
+| `<APP_ROLE>`の実効権限（CONNECT/USAGE/表・列・sequence、default ACL、RLS）と契約Bとの差 | | | | |
 
 ## 4. イメージdigest・registry・実行UID・CPUアーキテクチャ
 
