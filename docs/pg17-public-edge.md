@@ -12,6 +12,8 @@
 
 記録表の列: 項目 / 値(私有メモ参照) / 確認日 / 確認者 / 合否。
 
+人間が行う作業の順番・期待値・止める条件・Issueへの記録テンプレートは[pg17-operator-checklist.md](pg17-operator-checklist.md)にまとめた。
+
 ## 1. 現行Compose・PG17コンテナ・volume
 
 目的: 公開レイヤーが触れてはならない対象を特定する。
