@@ -14,6 +14,8 @@ D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-d
 
 所要の目安: Part 0は5分、Part 1は判断待ちを除き30分、Part 2は1時間程度。
 
+2026-10-19追記: 旧名`ghcr.io/m0o9l0v3/nexus-public-api`への初回発行はpush後のprivate検査で失敗し、Public表示を確認した。ユーザー承認により新しい発行先を`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`に変更する。D1・D2・V4は新名で確認する。新名の発行・取得確認と旧Public版の扱いは未完了。名前だけでprivateとは判定しない。
+
 ## Part 0: 最初にVPSのアーキテクチャだけ確認する
 
 D1・D3でdigestが対応しているかを判断するために、Part 1より先に行う（読み取りのみ）。
