@@ -151,12 +151,14 @@ Issue #7（隔離検証）と本番で使うpublic-apiのimmutable digestを、�
 id: DEC-2
 status: decided
 choice: B
-registry: ghcr.io/m0o9l0v3/nexus-public-api # 提案名。利用可否は未確認
+registry: ghcr.io/m0o9l0v3/nexus-public-api-pg17-private # 2026-10-19承認の新名。利用可否・発行は未確認
 visibility: private
 vps_pull_auth: "PAT（classic）、scopeはread:packagesのみ"
-target_platform:    # 未確認。Part 0の結果で確定し、採用digestと照合する
+target_platform: linux/amd64 # 2026-10-19の人間による読み取り確認。新digestとの照合は未完了
 decided_on: 2026-10-18
 decided_by: m0o9l0v3
+initial_registry: ghcr.io/m0o9l0v3/nexus-public-api # 2026-10-18決定時の提案名。初回発行でPublic表示となり置換
+updated_on: 2026-10-19 # registry・target_platform・remaining_risks・application_statusを更新
 rationale:
   summary: "AI提案を人間が承認。GitHub Actionsからpublic-apiをGHCRへ発行し、初期はprivateとする。platformは確認後に確定する。"
   reasons:
@@ -171,7 +173,7 @@ rationale:
     - "VPSには読み取り専用資格だけを置き、値をGitや文書に記録しない。"
     - "採用commit・digest・platformを照合し、本番参照は@sha256:で固定する。"
   remaining_risks:
-    - "Mobile側のworkflowはローカル実装済み。レビュー・環境設定・実行確認が必要。"
+    - "Mobile PR #97は統合済み。旧名の初回発行はprivate検査で失敗。新名への修正レビュー・再発行・private確認が必要。"
     - "VPSの取得資格には期限・更新・失効管理が必要。"
     - "digest固定だけでは、同じソースからの再build結果の一致までは保証しない。"
 follow_up:
@@ -182,8 +184,14 @@ follow_up:
     - "NexusInfra docs/pg17-operator-checklist.md D1・D2・V4: GHCR認証とplatform照合に対応。"
   issue_updates_pending:
     - "#5 §4・#7に採用経路を反映し、採用commit・digest・発行ジョブURLを記録する。"
-  application_status: "workflow・発行ガード・証跡出力をMobileにローカル実装済み。platform・パッケージ利用可否は未確認。資格発行・イメージ発行・VPS操作・本番適用は未実施。"
+  application_status: "2026-10-19: PR #97統合・Environment設定済み。旧名へのpush成功、発行後private検査失敗、証跡保存未完了。新名の修正レビュー・利用可否確認・発行・取得認証・本番適用は未完了。"
 ```
+
+### 2026-10-19追記: Private方針を維持した発行先変更
+
+[初回発行ジョブ](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39200756827)はAPIテスト・build・旧名`ghcr.io/m0o9l0v3/nexus-public-api`へのpushまで成功し、発行後のprivate検査で失敗した。人間の画面確認でPublic表示を確認した。公開に変わった経緯は未確定。ユーザーはprivate方針を維持し、別名へ切り替える修正を承認した。
+
+新しい発行先は`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`とする。名前だけでprivateとは判定せず、利用可否・権限を確認し、発行前後のprivate検査・採用証跡の保存を完了してから採用する。初回ジョブの証跡保存は未完了。VPS platformは人間の読み取り確認で`linux/amd64`と確認済みだが、新digestとの照合・取得認証は未完了。旧Public版の削除や公開範囲の変更はこの修正に含めず、扱いを別途判断する。上の「判断に必要な追加確認」は2026-10-18時点の記録として旧名のまま残し、決定ブロックは`updated_on`で更新日を区別する。
 
 ### 決定後に更新する箇所
 

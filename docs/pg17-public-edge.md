@@ -111,9 +111,11 @@ docker buildx imagetools inspect <IMAGE_REF> | head -n 5   # digest確認のみ
 > コードから確認済み（2026-10-18、NexusMobile `develop` `6459abd`。VPSの値ではない）:
 > - 実行UID: `apps/public-api/Dockerfile`の最終段は`USER $APP_UID`（基底`mcr.microsoft.com/dotnet/aspnet:8.0`、既定1654）。採用digestで`docker image inspect --format '{{.Config.User}}'`を実測し、secretの所有者をその値に合わせる（Issue #7）。
 > - healthcheck: `/app/healthcheck`が`curl`で`http://127.0.0.1:8080/health`を叩く。Composeの`healthcheck`はこれを使う。
-> - registry経路の調査時点の実装: GitLab CIの`public-api-image`がGitLab Registryへcommit SHAタグでpushし、`image-digests/public-api.txt`に`@sha256:`を記録。DEC-2のGitHub ActionsからのGHCR発行は今回Mobile側に追加（未実行・未発行）。
+> - registry経路の調査時点の実装: GitLab CIの`public-api-image`がGitLab Registryへcommit SHAタグでpushし、`image-digests/public-api.txt`に`@sha256:`を記録。DEC-2のGitHub ActionsからのGHCR発行は今回Mobile側に追加（調査時点では未実行・未発行。2026-10-19の状況は下記追記）。
 
 **DEC-2決定（2026-10-18）:** [案B](pg17-edge-decisions.md)を採用し、Mobileの別PRでGitHub Actions → GHCRの経路を整備する。初期visibilityはprivate、CIの発行認証は`GITHUB_TOKEN`、VPSの取得資格はPAT（classic）の`read:packages`のみとする（[GitHub公式資料](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)）。提案名は`ghcr.io/m0o9l0v3/nexus-public-api`で、利用可否・発行権限は要確認。VPSのplatformはPart 0で確認し、レビュー済みcommit SHA・発行ジョブURL・digest・対応platformを照合してから採用する。digest固定は同じイメージの指定であり、再build結果の一致を保証するものではない。資格の値は記録せず、期限・更新・失効を管理する。workflowと発行ガードはMobileにローカル実装済み（未レビュー・未実行）。資格発行・イメージ発行・VPS操作・本番適用は未実施。
+
+**2026-10-19追記:** 旧名`ghcr.io/m0o9l0v3/nexus-public-api`への[初回発行](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39200756827)はpush後のprivate検査で失敗し、人間の画面確認でもPublic表示だった。ユーザー承認によりprivate方針を維持し、新名`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`へ切り替える。新名の利用可否・発行・private確認・証跡保存・VPSからの取得はまだ未完了。旧Public版の扱いは別途判断し、この変更で公開が解消したとは扱わない。初期決定時の未実施記録と区別する。
 
 ## 5. ネットワーク境界・DNS・ACME
 
