@@ -138,7 +138,7 @@ Issue #7（隔離検証）と本番で使うpublic-apiのimmutable digestを、�
 ### 判断に必要な追加確認
 
 - VPSのOS・CPUアーキテクチャをPart 0で確認し、`target_platform`を確定する。確認前にplatformを推測して採用digestを決めない。
-- 提案名`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`の利用可否、既存パッケージとの競合、Mobileのworkflowから発行できる権限を確認する。
+- 提案名`ghcr.io/m0o9l0v3/nexus-public-api`の利用可否、既存パッケージとの競合、Mobileのworkflowから発行できる権限を確認する。
 - PAT発行アカウントが対象パッケージの読み取り権限を持つこと、PAT（classic）がアカウント・組織の認証方針で利用できることを確認する。必要な場合はSSO承認も確認する。
 - 発行対象のブランチ・commit、レビュー済みcommitの採用手順、digest・発行ジョブ・provenance/attestationの保存方法と期間を確定する。
 - 初期はprivateとする。将来publicに変更する場合は、公開してよい成果物かを別途判断する。GitLab経路の稼働確認は案B採用の前提とせず、暫定利用を検討する場合に限って行う。
@@ -157,6 +157,8 @@ vps_pull_auth: "PAT（classic）、scopeはread:packagesのみ"
 target_platform: linux/amd64 # 2026-10-19の人間による読み取り確認。新digestとの照合は未完了
 decided_on: 2026-10-18
 decided_by: m0o9l0v3
+initial_registry: ghcr.io/m0o9l0v3/nexus-public-api # 2026-10-18決定時の提案名。初回発行でPublic表示となり置換
+updated_on: 2026-10-19 # registry・target_platform・remaining_risks・application_statusを更新
 rationale:
   summary: "AI提案を人間が承認。GitHub Actionsからpublic-apiをGHCRへ発行し、初期はprivateとする。platformは確認後に確定する。"
   reasons:
@@ -189,7 +191,7 @@ follow_up:
 
 [初回発行ジョブ](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39200756827)はAPIテスト・build・旧名`ghcr.io/m0o9l0v3/nexus-public-api`へのpushまで成功し、発行後のprivate検査で失敗した。人間の画面確認でPublic表示を確認した。公開に変わった経緯は未確定。ユーザーはprivate方針を維持し、別名へ切り替える修正を承認した。
 
-新しい発行先は`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`とする。名前だけでprivateとは判定せず、利用可否・権限を確認し、発行前後のprivate検査・採用証跡の保存を完了してから採用する。初回ジョブの証跡保存は未完了。VPS platformは人間の読み取り確認で`linux/amd64`と確認済みだが、新digestとの照合・取得認証は未完了。旧Public版の削除や公開範囲の変更はこの修正に含めず、扱いを別途判断する。本文の初期決定時の記録とは、この追記の日付を区別する。
+新しい発行先は`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`とする。名前だけでprivateとは判定せず、利用可否・権限を確認し、発行前後のprivate検査・採用証跡の保存を完了してから採用する。初回ジョブの証跡保存は未完了。VPS platformは人間の読み取り確認で`linux/amd64`と確認済みだが、新digestとの照合・取得認証は未完了。旧Public版の削除や公開範囲の変更はこの修正に含めず、扱いを別途判断する。上の「判断に必要な追加確認」は2026-10-18時点の記録として旧名のまま残し、決定ブロックは`updated_on`で更新日を区別する。
 
 ### 決定後に更新する箇所
 

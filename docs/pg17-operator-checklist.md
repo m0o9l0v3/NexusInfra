@@ -10,7 +10,7 @@
 - public image digest（`@sha256:`）とMobile commit SHAは秘密ではないので、#7の記録に使ってよい。
 - VPSでは読み取りのみ。`docker compose up/down/restart/stop/rm`、DBへの書込み、パケットフィルター変更、timer登録、`docker pull`はしない。
 
-D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で方針決定済み。実装はローカルで追加済みだが採用digestによる結合検証は未完了で、platform・LP origin等の未確認事項は各DECと本書の手順に従って確認する。
+D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で方針決定済み。実装はローカルで追加済みだが採用digestによる結合検証は未完了で、LP origin等の未確認事項と、確認済みplatform（`linux/amd64`）と採用digestの照合は各DECと本書の手順に従って確認する。
 
 所要の目安: Part 0は5分、Part 1は判断待ちを除き30分、Part 2は1時間程度。
 
@@ -32,7 +32,7 @@ docker version --format '{{.Server.Os}}/{{.Server.Arch}}'
 
 | # | 決めること | 具体的な作業 | 記録 | 止める条件 |
 | --- | --- | --- | --- | --- |
-| D1 | public-apiのdigest発行経路 | DEC-2案B決定済み。Mobileの別PRでGitHub Actions → GHCR（初期private）の発行経路を整備する。提案パッケージ名の利用可否・発行権限を確認し、レビュー済みcommitの発行ジョブとdigestを取得する。workflowはローカル実装済み・未実行のため、決定や実装のみでdigest取得済みとしない | 採用commit SHA、digest、ジョブURL、選んだ経路 | workflow未レビュー・未実行、digestが`@sha256:`でない、採用commitが未レビュー |
+| D1 | public-apiのdigest発行経路 | DEC-2案B決定済み。Mobileの別PRでGitHub Actions → GHCR（初期private）の発行経路を整備する。提案パッケージ名の利用可否・発行権限を確認し、レビュー済みcommitの発行ジョブとdigestを取得する。workflowはMobile PR #97で統合済み。旧名での初回発行はprivate検査で失敗し、新名では未発行のため、決定や実装のみでdigest取得済みとしない | 採用commit SHA、digest、ジョブURL、選んだ経路 | 新名での発行・private確認が未完了、digestが`@sha256:`でない、採用commitが未レビュー |
 | D2 | VPSからのpull認証 | GHCR取得には**読み取り専用**PAT（classic）、scope `read:packages`のみを使用する。発行アカウントのパッケージ読み取り権限、認証方針、必要な場合はSSO承認を確認する。CIの発行には別途`GITHUB_TOKEN`を使う。VPSでの保存先はroot用docker設定に限る。資格発行・配置は未実施 | 発行の有無・失効日・更新方法（値は書かない） | 書込み権限付き資格、classic PAT利用不可、対象パッケージへの読み取り権限なし |
 | D3 | Caddyのdigest | Macで`docker buildx imagetools inspect caddy:<採用する2.x版>`を実行し、index digestと、その一覧にPart 0の「VPSのplatform」の行があることを確認する | 版、digest | VPSのplatformのmanifestが無い |
 | D4 | CORS origin | DEC-3案A決定済み。初期はAPI自身のHTTPS originのみ。LPには当日イベント一覧のAPI利用方針があるため、originと接続構成を確認し、別originから直接接続する前に案Bを再判断する。同時公開なら再判断も公開前に完了する。任意method許可の妥当性も確認する | 展開後の許可origin一覧、LP接続前の再判断要否と結果 | ワイルドカード・HTTP origin、別originのLPが必要なのに設定変更・ブラウザ検証が未完了 |
@@ -85,7 +85,7 @@ docker exec --user postgres <PG17_CONTAINER> psql -U nexus -d nexus -c "SELECT c
 
 ### V4. registry到達とplatformの照合（§4）
 
-アーキテクチャをPart 0で確認してから実施する（現時点では未確認）。DEC-2で採用したGHCRのprivateパッケージについて、D1のdigestにD2の読み取り専用資格で到達でき、そのdigestがVPSのplatform向けであることを確かめる。DEC-2の決定だけでは、発行・認証・platform照合の合格とはしない。
+アーキテクチャをPart 0で確認してから実施する（2026-10-19に人間の読み取り確認で`linux/amd64`。新digestとの照合は未完了）。DEC-2で採用したGHCRのprivateパッケージについて、D1のdigestにD2の読み取り専用資格で到達でき、そのdigestがVPSのplatform向けであることを確かめる。DEC-2の決定だけでは、発行・認証・platform照合の合格とはしない。
 
 ```sh
 sudo sh -c 'test -f /root/.docker/config.json && grep -o "\"[^\"]*\": *{" /root/.docker/config.json | cut -d\" -f2'   # 登録済みregistryのホスト名だけ
