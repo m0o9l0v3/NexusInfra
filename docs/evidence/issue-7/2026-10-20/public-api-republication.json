@@ -1,0 +1,12 @@
+{
+  "repository": "m0o9l0v3/NexusMobile",
+  "source_commit": "d3e20b13847ff973783670fe9bb4d133cc168a5b",
+  "image": "ghcr.io/m0o9l0v3/nexus-public-api-pg17-private@sha256:847b6d0f20902dbe420da0e59fa955219e979590d80ec010d3dac833acb1e098",
+  "target_platform": "linux/amd64",
+  "visibility": "private",
+  "workflow_commit": "d3e20b13847ff973783670fe9bb4d133cc168a5b",
+  "run_url": "https://github.com/m0o9l0v3/NexusMobile/actions/runs/39373577806",
+  "job_url": "https://github.com/m0o9l0v3/NexusMobile/actions/runs/39373577806/job/118466664197",
+  "run_attempt": "1",
+  "provenance": "BuildKit mode=min attestation attached to registry image"
+}

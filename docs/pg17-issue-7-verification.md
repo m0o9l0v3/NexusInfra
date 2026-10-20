@@ -1,8 +1,17 @@
 # Issue #7 隔離検証記録
 
-2026-10-20 JST。**DB権限は成功。採用Privateイメージの取得・起動とCaddy経由GETは成功したが、正常なログPOSTが500となり採用digestは不合格。NexusMobile PR #99で修正し、レビュー・統合・再発行後の新digest検証が必要。Issue #7は未完了。本番未適用。**
+2026-10-20 JST。**NexusMobile PR #99はマージ済み。修正版のPrivateイメージ再発行が成功し、新digestとlinux/amd64を確認した。旧digestのログPOST不具合を修正したソースだが、新digestの隔離受け入れ検証は未実施。Issue #7は未完了。本番未適用。**
 
-## 対象と証跡
+## 修正版の再発行（2026-10-20）
+
+- PR #99は`develop`へマージ済み。マージcommit: `d3e20b13847ff973783670fe9bb4d133cc168a5b`。PRの全CIが成功し、レビュー済み`a765aa9`とマージcommitの`apps`・`tools`・`deploy`・発行workflowに差分がないことを確認した。
+- ユーザーの再発行指示に基づき、このcommitと確認済み`linux/amd64`を指定して手動発行した。Environmentの承認対象もこの発行に限定した。
+- [発行ジョブ](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39373577806/job/118466664197)成功。公開前後のPrivate検査、APIテスト、build/push、provenance・SBOM、証跡アップロードを完了。
+- 新候補: `ghcr.io/m0o9l0v3/nexus-public-api-pg17-private@sha256:847b6d0f20902dbe420da0e59fa955219e979590d80ec010d3dac833acb1e098`。
+- [発行証跡](evidence/issue-7/2026-10-20/public-api-republication.json)のsource commit・workflow commit・platform・Privateを照合した。認証済みでregistry manifestを読み、`linux/amd64` descriptorを確認した（[確認結果](evidence/issue-7/2026-10-20/public-api-republication-checks.json)）。別の`unknown/unknown` descriptorは実行用platformとして数えない。
+- 新digestのruntime起動・HTTP・hash連鎖等の受け入れ検証とブラウザCORS検査はまだ行っていない。下のARMローカル結果を新digestの合格へ読み替えない。VPS操作・本番適用は行っていない。
+
+## 旧候補と初回検証の証跡
 
 - [Issue #7](https://github.com/m0o9l0v3/NexusInfra/issues/7) の契約B。[正式な受け入れ条件](pg17-baseline.md#4-issue-7-の受け入れ条件正式契約b)は変更しない。
 - NexusMobileソース: `528f89fdf0318e5111d067d1e8760704d0ea2d89`。`git archive`で取り出したソースから移行SQLを生成した。実DB・dump・本番secretは使っていない。
@@ -54,7 +63,7 @@ secretのbind元はVMから参照できるGit無視対象の`secrets/`配下と�
 
 各停止はproject指定の`down --remove-orphans`。`down -v`は使っていない。volumeは残しており、この作業で削除していない。既存VPS・本番PG17・PG18構成には操作していない。
 
-## 採用イメージの検証結果
+## 旧候補イメージの検証結果
 
 採用候補digestの匿名pullは`unauthorized`。現在のGitHub CLI認証を一時Docker設定で利用するとloginは成功したが、対象digestのpullは`403 Forbidden`。packageメタデータのAPI照会も `You need at least read:packages scope to get a package.` で403だった。認証データは出力・Git保存していない。一時Docker認証設定は削除済み。
 
@@ -72,7 +81,7 @@ secretのbind元はVMから参照できるGit無視対象の`secrets/`配下と�
 
 .NET SDK 8.0.425 / arm64コンテナで、修正前は追加6ケースが500応答により失敗し、修正後はpublic-api全27ケースが成功した。Macの.NET 10ロールフォワード実行は、TestHostのPipeWriter互換性エラーがあるためテスト合否の根拠に使わない。
 
-PR #99のレビュー・統合とPrivateイメージ再発行後、発行証跡の新commit・digestを固定し、[隔離ハーネスの手順](pg17-public-edge.md#12-隔離検証issue-7実digest入手後)で全受け入れ条件を再検証する。現在の不合格digestの結果を、ソース修正だけで合格へ変更しない。採用イメージはlinux/amd64、今回のMac engineはlinux/arm64なので、互換実行とVPSでのネイティブ実行も区別する。
+PR #99のレビュー・統合・Privateイメージ再発行は完了した。上記の新commit・digestを固定し、[隔離ハーネスの手順](pg17-public-edge.md#12-隔離検証issue-7実digest入手後)で全受け入れ条件を再検証する。現在の不合格digestの結果を、ソース修正だけで合格へ変更しない。採用イメージはlinux/amd64、今回のMac engineはlinux/arm64なので、互換実行とVPSでのネイティブ実行も区別する。
 
 ### ローカル修正版のPG17接続確認（採用digestの代替にはしない）
 

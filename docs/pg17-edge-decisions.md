@@ -193,6 +193,10 @@ follow_up:
 
 新しい発行先は`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`とする。名前だけでprivateとは判定せず、利用可否・権限を確認し、発行前後のprivate検査・採用証跡の保存を完了してから採用する。初回ジョブの証跡保存は未完了。VPS platformは人間の読み取り確認で`linux/amd64`と確認済みだが、新digestとの照合・取得認証は未完了。旧Public版の削除や公開範囲の変更はこの修正に含めず、扱いを別途判断する。上の「判断に必要な追加確認」は2026-10-18時点の記録として旧名のまま残し、決定ブロックは`updated_on`で更新日を区別する。
 
+### 2026-10-20追記: 修正版のPrivate再発行
+
+NexusMobile PR #98でPrivate用発行先への発行が成功した後、Issue #7の隔離検証でログPOSTの500を発見した。修正PR #99を統合し、`d3e20b1` / `linux/amd64`で[再発行](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39373577806)が成功した。発行前後のPrivate検査・証跡保存・認証済みmanifest取得を確認した。新digestと検証段階は[Issue #7の検証記録](pg17-issue-7-verification.md)に記載する。新digestでの隔離受け入れ検証・VPS取得認証・本番適用は未完了。過去日付の決定ブロックは当時の記録として維持する。
+
 ### 決定後に更新する箇所
 
 - `docs/pg17-public-edge.md` §4の「registry経路」の注記、`docs/pg17-operator-checklist.md` D1・D2・V4
