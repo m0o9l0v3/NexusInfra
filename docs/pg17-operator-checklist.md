@@ -10,7 +10,7 @@
 - public image digest（`@sha256:`）とMobile commit SHAは秘密ではないので、#7の記録に使ってよい。
 - VPSでは読み取りのみ。`docker compose up/down/restart/stop/rm`、DBへの書込み、パケットフィルター変更、timer登録、`docker pull`はしない。
 
-D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で方針決定済み。実装はローカルで追加済み。採用digestによる結合検証は2026-10-20に[隔離検証](pg17-issue-7-digest-verification.md)で実施した（検証用volumeの個別削除のみ人間の再確認待ち）。LP origin等の未確認事項と、VPSのplatform（`linux/amd64`）と採用digestのVPS上での照合（V4）は各DECと本書の手順に従って確認する。
+D1（digest経路）・D4（CORS）と、#6のrate limit設定は、[pg17-edge-decisions.md](pg17-edge-decisions.md)（DEC-1〜3）で方針決定済み。実装はローカルで追加済み。採用digestによる結合検証は2026-10-20に[隔離検証](pg17-issue-7-digest-verification.md)で完了した。LP origin等の未確認事項と、VPSのplatform（`linux/amd64`）と採用digestのVPS上での照合（V4）は各DECと本書の手順に従って確認する。
 
 所要の目安: Part 0は5分、Part 1は判断待ちを除き30分、Part 2は1時間程度。
 
