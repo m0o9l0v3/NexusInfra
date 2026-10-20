@@ -1,0 +1,4 @@
+PASS: own client and SDK helper containers removed
+PASS: edge stopped before isolated database, each with explicit project
+PASS: both project container lists are empty
+PASS: no down -v, no volume removal, no production operation

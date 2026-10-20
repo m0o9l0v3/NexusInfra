@@ -1,0 +1,5 @@
+NexusMobile repair source: a765aa9
+SDK: 8.0.425 (linux/arm64 container)
+Before DTO fix: regression tests Failed 6, Passed 0
+After DTO fix: public-api suite Failed 0, Passed 27, Skipped 0
+HTTP tests use EF InMemory and the real MVC/background worker; PostgreSQL privileges are tested separately.

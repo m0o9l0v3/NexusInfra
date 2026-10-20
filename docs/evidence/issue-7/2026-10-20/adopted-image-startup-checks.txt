@@ -1,0 +1,50 @@
+PASS: empty disposable PG17.11 matches the inventoried live shape
+PASS: role bootstrap applied once; a second run is rejected
+PASS: superuser 'nexus' fails the runtime readiness predicate (NO-GO for the live role)
+PASS: migration SQL refuses a database with unknown tables, rows preserved
+PASS: reviewed migration SQL applied, then replayed idempotently
+PASS: grant-runtime.sql applied as nexus_owner
+PASS: history equals the two reviewed migrations; spots/events/visit_logs exist
+PASS: DatabaseReadiness predicate for nexus_public
+PASS: SELECT spots/events limited to published rows
+PASS: SELECT __EFMigrationsHistory
+PASS: INSERT visit_logs (the only permitted write)
+PASS: SELECT visit_logs(chain_id, created_at, hash) for the audit chain
+PASS: denied: SELECT departments
+PASS: denied: SELECT exhibits
+PASS: denied: SELECT issued_tokens
+PASS: denied: SELECT map_datasets
+PASS: denied: SELECT oc_days
+PASS: denied: SELECT one_time_login_codes
+PASS: denied: SELECT open_campus_timeslots
+PASS: denied: SELECT qr_issues
+PASS: denied: SELECT revoked_jti
+PASS: denied: SELECT timeslot_exhibits
+PASS: denied: SELECT future table (no default privileges)
+PASS: denied: SELECT visit_logs.session_id
+PASS: denied: SELECT visit_logs.*
+PASS: denied: INSERT spots
+PASS: denied: INSERT events
+PASS: denied: UPDATE spots
+PASS: denied: UPDATE events
+PASS: denied: UPDATE visit_logs
+PASS: denied: DELETE spots
+PASS: denied: DELETE events
+PASS: denied: DELETE visit_logs
+PASS: denied: TRUNCATE visit_logs
+PASS: denied: INSERT migration history
+PASS: denied: DELETE migration history
+PASS: denied: CREATE TABLE
+PASS: denied: CREATE SCHEMA
+PASS: denied: ALTER TABLE
+PASS: denied: DROP TABLE
+PASS: denied: CREATE ROLE
+PASS: denied: disable row level security
+PASS: denied: SET ROLE nexus_owner
+PASS: denied: SET ROLE nexus
+PASS: denied: COPY TO PROGRAM
+PASS: denied: wrong password for nexus_public
+PASS: migration replay after grants keeps history and privileges intact
+PASS: API image UID 1654; dummy bind secrets owned by UID with mode 0400
+PASS: raw, resolved, and environment validators passed for DB isolation and edge
+PASS: adopted image starts in Production with nexus_public; schema/history/data unchanged at startup
