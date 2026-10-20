@@ -1,0 +1,13 @@
+{
+  "nexus_mobile_commit": "528f89fdf0318e5111d067d1e8760704d0ea2d89",
+  "migrations": [
+    "20260905120000_AddMapDatasets",
+    "20260919120000_AddInitialPostgreSqlSchema"
+  ],
+  "files": {
+    "roles_sql": "0ec65dce204f27fd01db974cc9508f2e36594cfe1708b0c84af0aca80fd4d65b",
+    "migrate_sql": "7cf58c307611ebec07e617add3f18d7fa65eee30c6de16dc2d989d5e4a9da763",
+    "grant_runtime_sql": "456bbf9836b5fede04fa0d914beaca743456ee84452c63db13479667c8e9c134"
+  },
+  "visit_logs_contract": "B: INSERT + SELECT(chain_id, created_at, hash) only"
+}

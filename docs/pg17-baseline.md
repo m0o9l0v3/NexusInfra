@@ -65,6 +65,8 @@ DB権限（`nexus_public`で接続）:
 
 記録（Issue #7へ）: public-api/Caddy/PG17のdigest、Mobile commit、`pg17-baseline.py manifest`のSQL sha256、各項目の合否と失敗条件。
 
+2026-10-20の[隔離検証記録](pg17-issue-7-verification.md): 採用候補と同じソースでDB権限64項目が成功。Privateイメージの取得認証待ちで、実API/Caddyの条件は未確認。Issue #7は未完了。
+
 ## 5. 隔離baselineの構築と検証
 
 `compose.pg17-baseline.yml`と`scripts/pg17-baseline.py`は、**現行と同じ形（`nexus`/`nexus`、PG17）の使い捨てコンテナ**を新しい空volumeに作る。`nexus_postgres_data`や既存project名は拒否し、同じエンジンにlive container/volumeがあれば中止する。ポート公開なし。

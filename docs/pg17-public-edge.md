@@ -264,6 +264,8 @@ docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml stop
 
 ## 12. 隔離検証（Issue #7、実digest入手後）
 
+最新の実施結果は[Issue #7 隔離検証記録](pg17-issue-7-verification.md)を参照。2026-10-20時点ではDB権限の検証まで成功し、実API/CaddyはPrivateイメージの取得認証待ち。
+
 Mac等の専用ローカルDocker engineだけで行う。VPSや本番と同じengine、実dump・本番secretは使わない。先にcontextの接続先がlocal Unix socketであること、live container/volumeがないこと、host 80/443とproject `nexus-edge-pg17`が未使用であることを確認する。同projectがあれば停止せず別engineを用意する。以下はハーネスの手順で、実APIの検証は採用GHCR digest入手後に実施・記録する。
 
 1. `NEXUS_MOBILE_DIR`とレビュー済みcommitから、[baseline §5](pg17-baseline.md#5-隔離baselineの構築と検証)と同じ方法で移行SQLを私有ファイルへ生成し、`pg17-baseline.py manifest`で移行ID2本・SQL hash・起動時migrationなしを確認する。旧Issue #6 T6のSELECT専用`public_readonly`や独自の簡略schemaは使わない。
