@@ -65,7 +65,7 @@ DB権限（`nexus_public`で接続）:
 
 記録（Issue #7へ）: public-api/Caddy/PG17のdigest、Mobile commit、`pg17-baseline.py manifest`のSQL sha256、各項目の合否と失敗条件。
 
-2026-10-20の[隔離検証記録](pg17-issue-7-verification.md): 採用候補と同じソースでDB権限64項目が成功。採用イメージのGETは成功したがログPOSTが500となり不合格。NexusMobile PR #99はマージ・再発行済みで、新digestで再検証する。Issue #7は未完了。
+2026-10-20の[新digest検証結果](pg17-issue-7-digest-verification.md): PR #99を統合した実API/Caddyの採用digestで、上記条件を確認した。本番未適用。初回の不合格から再発行までの経緯は[初回検証記録](pg17-issue-7-verification.md)に残す。
 
 ## 5. 隔離baselineの構築と検証
 

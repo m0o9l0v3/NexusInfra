@@ -1,0 +1,6 @@
+Browser: Codex in-app browser, http://127.0.0.1:8899/
+PASS: same-origin control returns API health 200
+PASS: cross-origin no-cors request succeeds as opaque (transport works)
+PASS: browser blocks reading API response from unapproved origin
+ALL 3 CHECKS PASSED
+The dedicated relay verifies Caddy internal CA, forwards Origin, and preserves API Access-Control response headers; no browser warning was bypassed and no global trust was changed.

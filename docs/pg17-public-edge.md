@@ -264,7 +264,7 @@ docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml stop
 
 ## 12. 隔離検証（Issue #7、実digest入手後）
 
-最新の実施結果は[Issue #7 隔離検証記録](pg17-issue-7-verification.md)を参照。2026-10-20時点ではDB権限・採用イメージのGETまで成功し、ログPOSTの500を修正したNexusMobile PR #99はマージ・再発行済み。新digestでの再検証は未実施。
+2026-10-20に[新採用digestでの隔離検証](pg17-issue-7-digest-verification.md)を完了した。DB権限・ログ保存/hash連鎖・IP別制限・偽装ヘッダー・起動拒否・再接続・ブラウザCORSを確認済み。本番未適用。
 
 Mac等の専用ローカルDocker engineだけで行う。VPSや本番と同じengine、実dump・本番secretは使わない。先にcontextの接続先がlocal Unix socketであること、live container/volumeがないこと、host 80/443とproject `nexus-edge-pg17`が未使用であることを確認する。同projectがあれば停止せず別engineを用意する。以下はハーネスの手順で、実APIの検証は採用GHCR digest入手後に実施・記録する。
 

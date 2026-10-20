@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><title>Issue 7 CORS verification</title>
+<h1>Issue #7 browser CORS check</h1><p>New published API digest: 847b6d0f2090</p>
+<p>Dedicated loopback relay verifies Caddy's internal CA. API CORS headers are forwarded unchanged. No system trust settings are changed.</p>
+<pre id="result">RUNNING</pre><script>
+(async()=>{const lines=[];
+try {const control=await fetch('/control');if(control.status!==200)throw Error('control status');const json=await control.json();if(json.status!=='ok')throw Error('control body');lines.push('PASS: same-origin control returns API health 200');
+const opaque=await fetch('http://127.0.0.1:8900/relay-health',{mode:'no-cors'});if(opaque.type!=='opaque')throw Error('no-cors was not opaque');lines.push('PASS: cross-origin no-cors request succeeds as opaque (transport works)');
+let blocked=false;try {await fetch('http://127.0.0.1:8900/relay-health',{mode:'cors'});}catch(e){if(e instanceof TypeError)blocked=true;else throw e;}
+if(!blocked)throw Error('unapproved origin was readable');lines.push('PASS: browser blocks reading API response from unapproved origin');lines.push('ALL 3 CHECKS PASSED');
+}catch(e){lines.push('FAIL: '+e.message);}document.getElementById('result').textContent=lines.join('\n');})();</script>

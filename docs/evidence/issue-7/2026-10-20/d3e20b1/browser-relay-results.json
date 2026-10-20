@@ -1,0 +1,17 @@
+[
+  {
+    "upstream_status": 200,
+    "origin": null,
+    "cors_headers": {}
+  },
+  {
+    "upstream_status": 200,
+    "origin": null,
+    "cors_headers": {}
+  },
+  {
+    "upstream_status": 200,
+    "origin": "http://127.0.0.1:8899",
+    "cors_headers": {}
+  }
+]
