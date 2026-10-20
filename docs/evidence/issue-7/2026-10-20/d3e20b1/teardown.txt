@@ -1,0 +1,4 @@
+PASS: loopback browser relay stopped and clients removed
+PASS: edge stopped before isolated database, both with explicit -p project
+PASS: both project container lists empty; no running containers on the local engine
+PASS: no down -v, no volume removal, no production operation

@@ -1,0 +1,18 @@
+PASS: denied: SELECT visit_logs.id
+PASS: denied: SELECT visit_logs.session_id
+PASS: denied: SELECT visit_logs.event_type
+PASS: denied: SELECT visit_logs.spot_code
+PASS: denied: SELECT visit_logs.payload_json
+PASS: denied: SELECT visit_logs.occurred_at
+PASS: SELECT visit_logs.created_at
+PASS: denied: SELECT visit_logs.location_lat
+PASS: denied: SELECT visit_logs.location_lng
+PASS: denied: SELECT visit_logs.location_accuracy
+PASS: denied: SELECT visit_logs.prev_hash
+PASS: SELECT visit_logs.hash
+PASS: denied: SELECT visit_logs.hash_alg
+PASS: SELECT visit_logs.chain_id
+PASS: denied: UPDATE migration history
+PASS: denied: TRUNCATE migration history
+PASS: new connection after DB container restart
+PASS: 17 additional checks (disposable only)

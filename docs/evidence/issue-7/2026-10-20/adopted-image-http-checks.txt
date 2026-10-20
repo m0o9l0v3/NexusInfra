@@ -1,0 +1,7 @@
+PASS: Caddy excludes backend; edge contains only Caddy and API; only host 80/443 are published
+PASS: two clients have distinct public-network source IPs; neither joins edge/backend
+PASS: Caddy internal TLS GET /health = 200
+PASS: Caddy internal TLS GET /api/spots/public = 200 and one public fixture
+PASS: Caddy internal TLS GET /api/events/today = 200 and one public fixture
+PASS: spoofed X-Forwarded-Proto cannot change HTTPS response or bypass HTTP-to-HTTPS redirect
+PASS: unapproved Origin receives no Access-Control-Allow-Origin (HTTP check)

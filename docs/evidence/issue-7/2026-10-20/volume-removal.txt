@@ -1,0 +1,7 @@
+2026-10-20 15:05 JST engine: Colima profile nexus-db-verify (context colima-nexus-db-verify, unix:///Users/m09/.colima/nexus-db-verify/docker.sock)
+PASS: user reconfirmed the 5 target names in chat before removal; each volume had 0 containers (ps -a --filter volume=<name>)
+PASS: removed individually with docker volume rm: nexus-pg17-baseline-issue7-20261020-db, nexus-pg17-baseline-issue7-20261020b-db, nexus-pg17-baseline-issue7-20261020c-db, nexus-pg17-edge-iso-issue7-20261020-db, nexus-pg17-edge-iso-issue7-d3-20261020-db
+PASS: docker volume ls --filter name=issue7 returns 0 volumes after removal
+PASS: no prune, no down -v; volumes of other work (2026-09-25 PG17/PG18, studio) untouched
+NOTE: nexus-edge-pg17_caddy_config / nexus-edge-pg17_caddy_data (test internal CA only) kept; not in the §12 step 7 target
+PASS: profile returned to Stopped

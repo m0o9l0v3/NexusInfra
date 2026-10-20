@@ -1,0 +1,3 @@
+PASS: actual image DatabaseReadiness rejects a privileged nexus_public role
+PASS: actual image rejects nexus connection at configuration guard before readiness
+PASS: actual API restart reconnects; representative GETs return 200; schema/history/data unchanged

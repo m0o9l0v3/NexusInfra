@@ -1,0 +1,13 @@
+{
+  "capture_tool_image": "python@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4",
+  "scope": "diagnostic helper shares only the disposable API network namespace; captures HTTP request headers on destination port 8080",
+  "probes": 2,
+  "inbound_spoofed_xff": "198.51.100.77",
+  "inbound_spoofed_xfp": [
+    "http",
+    "ftp"
+  ],
+  "upstream_xff_matches_real_client_for_both": true,
+  "upstream_xfp_for_both": "https",
+  "edge_network_participants": 2
+}

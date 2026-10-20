@@ -1,0 +1,2 @@
+PASS: two persisted row hashes independently match HMAC-SHA256 canonical strings
+PASS: occurredAt uses the fixed fixture timestamp; createdAt final 100ns digit checked across 0-9 because PostgreSQL stores microseconds

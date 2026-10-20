@@ -1,0 +1,12 @@
+PASS: Caddy excludes backend; edge contains only Caddy and API; only host 80/443 are published
+PASS: two clients have distinct public-network source IPs; neither joins edge/backend
+PASS: Caddy internal TLS GET /health = 200
+PASS: Caddy internal TLS GET /api/spots/public = 200 and one public fixture
+PASS: Caddy internal TLS GET /api/events/today = 200 and one public fixture
+PASS: spoofed X-Forwarded-Proto cannot change HTTPS response or bypass HTTP-to-HTTPS redirect
+PASS: unapproved Origin receives no Access-Control-Allow-Origin (HTTP check)
+PASS: POST /api/logs = 202 and asynchronous row 1 persisted
+PASS: POST /api/logs = 202 and asynchronous row 2 persisted
+PASS: persisted logs share daily chain; second prev_hash equals first HMAC-SHA256 hash
+PASS: default 60/min limit: A exhausts 2 accepted + 58 invalid; spoofed XFF cannot reset A; B retains budget
+PASS: API restart reconnects; both DB GETs return 200 and schema/history/row counts are unchanged

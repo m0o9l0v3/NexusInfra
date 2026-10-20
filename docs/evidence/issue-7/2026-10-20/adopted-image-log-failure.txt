@@ -1,0 +1,6 @@
+FAIL: POST /api/logs with valid JSON returned 500 (expected 202)
+FAIL: queued row count did not increase; hash-chain acceptance is not met
+Exception: System.InvalidOperationException
+Record type PublicApi.Dto.CreateLogRequest has validation metadata defined on property EventType that will be ignored.
+EventType is a parameter in the record primary constructor; validation metadata must be associated with the constructor parameter.
+Source: actual adopted image logs, Production, dummy PG17 only

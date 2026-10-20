@@ -117,6 +117,8 @@ docker buildx imagetools inspect <IMAGE_REF> | head -n 5   # digest確認のみ
 
 **2026-10-19追記:** 旧名`ghcr.io/m0o9l0v3/nexus-public-api`への[初回発行](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39200756827)はpush後のprivate検査で失敗し、人間の画面確認でもPublic表示だった。ユーザー承認によりprivate方針を維持し、新名`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private`へ切り替える。新名の利用可否・発行・private確認・証跡保存・VPSからの取得はまだ未完了。旧Public版の扱いは別途判断し、この変更で公開が解消したとは扱わない。初期決定時の未実施記録と区別する。
 
+**2026-10-20追記:** 新名へのPrivate発行と認証済み取得を確認し、NexusMobile PR #99統合後の`d3e20b1`から再発行した`ghcr.io/m0o9l0v3/nexus-public-api-pg17-private@sha256:847b6d0f20902dbe420da0e59fa955219e979590d80ec010d3dac833acb1e098`（`linux/amd64`）を採用digestとした（[発行証跡](evidence/issue-7/2026-10-20/public-api-republication.json)）。同digestで[隔離検証](pg17-issue-7-digest-verification.md)を実施済み。VPSのpull資格（D2）・VPSからのmanifest照合（V4）・旧Public版の扱い・本番適用は未完了。
+
 ## 5. ネットワーク境界・DNS・ACME
 
 ```sh
@@ -155,10 +157,10 @@ df -h /var/lib/docker
 
 > コードから確認済み（2026-10-18、NexusMobile `develop` `6459abd`。VPSの値ではない）:
 > - CORS: `Cors:AllowedOrigins`のoriginだけ許可（任意header/method、credentialsなし）。iOSアプリはCORS不要のため、許可すべきブラウザoriginを決めて設定する。
-> - **DEC-3決定（2026-10-18）:** [案A](pg17-edge-decisions.md)を採用。初期の`Cors__AllowedOrigins__0`は`https://${PG17_EDGE_API_DOMAIN}`とし、別originのLPは許可しない。[NexusMobile #81](https://github.com/m0o9l0v3/NexusMobile/issues/81)には当日イベント一覧のAPI利用方針があるため、LPがAPIを使わないとは扱わない。LPのHTTPS originと接続構成を確認し、別originからの直接接続開始前に案Bを再判断する。LP同時公開が必要なら、この再判断も公開前に終える。現行ポリシーは任意methodを許可するため、その範囲も再確認する。Compose・validator・拒否テストはローカル実装済み。採用digestによるブラウザ検証・本番適用は未実施。
+> - **DEC-3決定（2026-10-18）:** [案A](pg17-edge-decisions.md)を採用。初期の`Cors__AllowedOrigins__0`は`https://${PG17_EDGE_API_DOMAIN}`とし、別originのLPは許可しない。[NexusMobile #81](https://github.com/m0o9l0v3/NexusMobile/issues/81)には当日イベント一覧のAPI利用方針があるため、LPがAPIを使わないとは扱わない。LPのHTTPS originと接続構成を確認し、別originからの直接接続開始前に案Bを再判断する。LP同時公開が必要なら、この再判断も公開前に終える。現行ポリシーは任意methodを許可するため、その範囲も再確認する。Compose・validator・拒否テストはローカル実装済み。採用digestによるブラウザ検証・本番適用は未実施（2026-10-20追記: ブラウザ検証は[隔離検証](pg17-issue-7-digest-verification.md)で実施済み。本番適用は未実施）。
 > - rate limit: クライアントIP単位のFixed Window。`POST /api/logs` 60回/60秒、`/api/logs/batch` 12回/60秒。GET系と`/health`は制限なし。
 > - **プロキシ越しのクライアントIP:** `X-Forwarded-For`は`RateLimiting:KnownNetworks`/`KnownProxies`のproxyからだけ信頼する（未設定ならloopbackのみ、`ForwardLimit=1`）。Caddy経由では`RateLimiting__KnownNetworks__0`にedge subnetを渡さないと、全クライアントがCaddyのIPで1つの枠を共有する。NexusMobileの`deploy/database/compose.production.yml`はこれを必須にしているが、PG18の`compose.yaml`とIssue #6 T1の構成には無い → #6で`PG17_EDGE_SUBNET`を渡すこと。
-> - **DEC-1決定（2026-10-18）:** [案A](pg17-edge-decisions.md#dec-1-caddy越しのクライアントipとrate-limit)を採用。初期edgeの参加はCaddyとpublic-apiのみとし、validatorで設定値とedge subnetの一致・サービス集合・接続networkを検査する。subnet全体を信頼するため、Studio等を追加する前に案Bまたはnetwork分離を含めて再判断する。運用時の実参加コンテナ確認と、採用Caddy版・digestによるクライアント別の制限枠・429・偽装ヘッダーの隔離検証が必要。Compose・validator・拒否テストはローカル実装済み。採用digestによるAPI隔離検証・本番適用は未実施。
+> - **DEC-1決定（2026-10-18）:** [案A](pg17-edge-decisions.md#dec-1-caddy越しのクライアントipとrate-limit)を採用。初期edgeの参加はCaddyとpublic-apiのみとし、validatorで設定値とedge subnetの一致・サービス集合・接続networkを検査する。subnet全体を信頼するため、Studio等を追加する前に案Bまたはnetwork分離を含めて再判断する。運用時の実参加コンテナ確認と、採用Caddy版・digestによるクライアント別の制限枠・429・偽装ヘッダーの隔離検証が必要。Compose・validator・拒否テストはローカル実装済み。採用digestによるAPI隔離検証・本番適用は未実施（2026-10-20追記: API隔離検証は[隔離検証](pg17-issue-7-digest-verification.md)で実施済み。運用時の実参加コンテナ確認・本番適用は未実施）。
 > - ログ: Serilogをstdoutへ（`Microsoft`はWarning以上）。request logはmethod・path・status・時間で、クライアントIP・本文は既定で含まない。DB永続化失敗時は例外を`LogError`で出す（DBエラー本文が載り得る）。Caddyはglobal `log`のみでsite単位のaccess logを設定していないため、アクセスIPは記録しない。保持はjson-file `10m×3`。
 
 ## 7. PG17バックアップ・復元検証・既存timer
@@ -263,6 +265,8 @@ docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml stop
 更新の失敗では私有envのイメージ参照をレビュー済みの前digestに戻し、§10の検査後に同じprojectで`docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml up -d --wait`を行う。DB migrationはこのprojectにない。別承認でDBを変えた場合の復元は[baselineのrollback境界](pg17-baseline.md)で判断する。
 
 ## 12. 隔離検証（Issue #7、実digest入手後）
+
+2026-10-20に[新採用digestでの隔離検証](pg17-issue-7-digest-verification.md)を完了した。DB権限・ログ保存/hash連鎖・IP別制限・偽装ヘッダー・起動拒否・再接続・ブラウザCORSを確認し、手順7の隔離volumeも個別削除済み。本番未適用。
 
 Mac等の専用ローカルDocker engineだけで行う。VPSや本番と同じengine、実dump・本番secretは使わない。先にcontextの接続先がlocal Unix socketであること、live container/volumeがないこと、host 80/443とproject `nexus-edge-pg17`が未使用であることを確認する。同projectがあれば停止せず別engineを用意する。以下はハーネスの手順で、実APIの検証は採用GHCR digest入手後に実施・記録する。
 

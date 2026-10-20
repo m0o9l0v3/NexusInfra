@@ -1,0 +1,25 @@
+{
+  "image": "ghcr.io/m0o9l0v3/nexus-public-api-pg17-private@sha256:847b6d0f20902dbe420da0e59fa955219e979590d80ec010d3dac833acb1e098",
+  "source_commit": "d3e20b13847ff973783670fe9bb4d133cc168a5b",
+  "workflow_conclusion": "success",
+  "checks": {
+    "pre_publish_private": "success",
+    "api_tests": "success",
+    "push": "success",
+    "post_publish_private": "success",
+    "receipt_upload": "success",
+    "authenticated_manifest_read": "success"
+  },
+  "registry_manifest_platforms": [
+    {
+      "architecture": "amd64",
+      "os": "linux"
+    },
+    {
+      "architecture": "unknown",
+      "os": "unknown"
+    }
+  ],
+  "runtime_acceptance": "not_yet_verified",
+  "production_applied": false
+}
