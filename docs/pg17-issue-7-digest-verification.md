@@ -1,6 +1,6 @@
 # Issue #7: 新採用digestのPG17隔離検証
 
-2026-10-20 JST。**採用API/Caddyの実digestで、契約Bの隔離受け入れ条件を確認した。本番未適用。** ローカルARM用にビルドした修正版の結果ではなく、Private registryから取得した発行済みAPIを検証した。
+2026-10-20 JST。**採用API/Caddyの実digestで、契約Bの隔離受け入れ条件のうち、検証用volumeの個別削除を除く全項目を確認した。本番未適用。** volumeの個別削除は人間の再確認待ちで未完了（[境界と後片付け](#境界と後片付け)）。 ローカルARM用にビルドした修正版の結果ではなく、Private registryから取得した発行済みAPIを検証した。
 
 ## 固定した入力
 
@@ -36,7 +36,7 @@
 | UID所有0400のsecretを読める | 成功。実コンテナでUID1654・owner1654・mode400。起動と実HMACログ保存で読み取りも確認 |
 | API再起動後の再接続 | 成功。healthとDBを使う両GETが200。表名・履歴・行数不変 |
 | Caddyはbackend非参加、host公開portは80/443のみ | 成功。edge参加者はCaddy/APIの2つだけ。テストクライアントはpublic側のみ |
-| project指定で停止、down -v不使用 | 成功。edge→DBの順で停止し、コンテナ残存なし。volumeは維持 |
+| project指定で停止、down -v不使用、volumeは個別に削除 | **一部未完了。** edge→DBの順でproject指定のdownを行い、コンテナ残存なし・`down -v`不使用は成功。volumeの個別削除は未実施（人間の再確認待ち） |
 
 DBの確認は既存baseline47項目に、全14列と移行履歴UPDATE/TRUNCATEの16項目を加えた。[DBと起動の記録](evidence/issue-7/2026-10-20/d3e20b1/baseline-and-startup.txt)、[HTTP12項目](evidence/issue-7/2026-10-20/d3e20b1/http-checks.txt)、[起動拒否など3項目](evidence/issue-7/2026-10-20/d3e20b1/startup-rejection.txt)を保存した。
 
@@ -58,6 +58,13 @@ DBの確認は既存baseline47項目に、全14列と移行履歴UPDATE/TRUNCATE
 
 secretはコンテナ内の所有者・modeで検証した。ホスト側ではUID501、コンテナ内ではUID1654として観測されるため、ホストのstatだけで読取可否を判断していない。
 
-[終了記録](evidence/issue-7/2026-10-20/d3e20b1/teardown.txt)のとおり、検証用relay・クライアントを終了し、edge、DBの順でprojectを指定してdownした。volumeを削除せず、ローカル検証VMは元の停止状態へ戻した。
+[終了記録](evidence/issue-7/2026-10-20/d3e20b1/teardown.txt)のとおり、検証用relay・クライアントを終了し、edge、DBの順でprojectを指定してdownした。ローカル検証VMは元の停止状態へ戻した。
+
+[§12の手順7](pg17-public-edge.md#12-隔離検証issue-7実digest入手後)と[受け入れ条件](pg17-baseline.md#4-issue-7-の受け入れ条件正式契約b)は、人間が対象を再確認した上で今回の隔離volumeを1個ずつ`docker volume rm`することを求める。今回はこの削除を行っていないため、後片付けの条件は未完了とする。削除対象は検証専用のColima profile `nexus-db-verify`（現在停止中）のengine上にある次のvolumeで、いずれもダミーデータのみを含む。
+
+- 今回: `nexus-pg17-edge-iso-issue7-d3-20261020-db`
+- 同日の旧digest・事前検証分（[初回検証記録](pg17-issue-7-verification.md)）: `nexus-pg17-edge-iso-issue7-20261020-db`、`nexus-pg17-baseline-issue7-20261020c-db`、およびDB起動前に失敗した試行で確保した別名volume
+
+人間が同profileを起動し、Docker contextがそのengineのlocal Unix socketを指すことを確認した上で`docker volume ls`で名前を再確認し、本番名（`nexus_postgres_data`等）・別作業のvolumeでないことを確認してから、1個ずつ`docker volume rm <名前>`で削除し、終了後にprofileを停止状態へ戻し、削除日と結果をIssue #7へ記録する。この記録までIssue #7の後片付け条件は完了扱いにしない。
 
 隔離での成功は、本番schemaの構築・VPSのpull資格・DBバックアップ/復元・本番デプロイの承認や成功を意味しない。これらは別の運用手順・承認範囲に残る。

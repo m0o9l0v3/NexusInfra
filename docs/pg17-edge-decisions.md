@@ -195,7 +195,7 @@ follow_up:
 
 ### 2026-10-20追記: 修正版のPrivate再発行
 
-NexusMobile PR #98でPrivate用発行先への発行が成功した後、Issue #7の隔離検証でログPOSTの500を発見した。修正PR #99を統合し、`d3e20b1` / `linux/amd64`で[再発行](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39373577806)が成功した。発行前後のPrivate検査・証跡保存・認証済みmanifest取得を確認した。新digestと検証段階は[Issue #7の検証記録](pg17-issue-7-verification.md)に記載する。その後、[新digestの隔離受け入れ検証](pg17-issue-7-digest-verification.md)も完了した。VPS取得認証・本番適用は未完了。過去日付の決定ブロックは当時の記録として維持する。
+NexusMobile PR #98でPrivate用発行先への発行が成功した後、Issue #7の隔離検証でログPOSTの500を発見した。修正PR #99を統合し、`d3e20b1` / `linux/amd64`で[再発行](https://github.com/m0o9l0v3/NexusMobile/actions/runs/39373577806)が成功した。発行前後のPrivate検査・証跡保存・認証済みmanifest取得を確認した。新digestと検証段階は[Issue #7の検証記録](pg17-issue-7-verification.md)に記載する。その後、[新digestの隔離受け入れ検証](pg17-issue-7-digest-verification.md)も実施した（検証用volumeの個別削除のみ人間の再確認待ち）。VPS取得認証・本番適用は未完了。過去日付の決定ブロックは当時の記録として維持する。
 
 ### 決定後に更新する箇所
 
