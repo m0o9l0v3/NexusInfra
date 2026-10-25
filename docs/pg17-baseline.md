@@ -37,6 +37,27 @@
 
 **2026-10-18にBで正式化（人間承認）。** NexusMobile `develop` `6459abd`でも`apps/public-api`・`apps/admin-api`・`tools`・`deploy`は`87446aa`から変更なし。Mobile側で契約を変える場合は、この節と4節を先に改訂する。
 
+### 3.1 改訂（2026-10-25、Issue #17）: 配信用 `delivery` スキーマ
+
+NexusMobile [E2-5](https://github.com/m0o9l0v3/NexusMobile/blob/develop/docs/decisions/E2-5-participant-data-delivery-v2.md) 案b（2026-10-21採用）に合わせ、契約Bに `delivery` を加える。`public`の権限（上記）は変えない。public-apiは`GET /api/v2/bundle`で`delivery.current_bundle`と`delivery.participant_bundles`をSELECTするだけで、書き込みの経路を持たない（NexusMobile #121、マージ済み）。
+
+- **配置**: `delivery`は、public-apiが接続し、Studioの`studio`スキーマがある**同じDB**（第1段階は現行PG17の`nexus`、NexusMobile `production-database.md` §0）に置く。ReleaseとbundleをStudioが同じトランザクションで書くため（E2-5 §3.1、M1-2）。Studioの配置は#8と整合させる。
+- **作る役割（決定）**: `sql/pg17-baseline/02-delivery-schema.sql`がsuperuserで**スキーマを先に作り、所有をStudioのmigratorに渡す**。migratorにはDBのCREATE権限を与えない（作れるのは自分が所有する`studio`と`delivery`の中だけ）。表とトリガーはStudioのレビュー済み移行（NexusStudio#11）がmigratorで作る。もう一方の案（migratorにDBのCREATEを与える）はmigratorが任意のスキーマを作れるようになるため採らない。オーナーの意向は「どちらでもよい」（Studio判断記録29 M1-D3）。
+- **権限**（`sql/pg17-baseline/03-grant-delivery.sql`、Studioの移行のたびに再実行）:
+
+  | role | `delivery.participant_bundles` | `delivery.current_bundle` |
+  |---|---|---|
+  | Studioの実行時role | SELECT, INSERT | SELECT, INSERT, UPDATE |
+  | `nexus_public` | SELECT | SELECT |
+  | その他 | なし | なし |
+
+  - `delivery`のUSAGEはStudioの実行時roleと`nexus_public`だけ（`PUBLIC`から剥奪）。default privilegesは設けず、`delivery`に表が増えると`03`は適用を拒否する（契約を先に改訂する）。
+  - `participant_bundles`のUPDATE・DELETE・TRUNCATE、`current_bundle`のDELETE・TRUNCATEは誰にも与えない。所有者（migrator）の暗黙の権限は残り、E2-5 §3.5の将来の削除（レビュー済みの手動手順）にだけ使う。
+  - `current_bundle.bundle_version`を減らすUPDATEはBEFORE UPDATEの行トリガーで拒否する（所有者にも効く）。`03`は有効なトリガーが無ければ適用を拒否する。初回の行はStudioが`INSERT … ON CONFLICT (singleton) DO UPDATE`で作る。
+  - `nexus_public`は引き続き`studio`スキーマを読めない。public-apiのreadiness述語（上記）は変わらない。
+- **Studioのrole名**: 実名は#8で確定する。`02`/`03`は`-v studio_migrator=… -v studio_app=…`で受け取り、隔離検証では仮名`nexus_studio_migrator`/`nexus_studio_app`（NexusStudio `deploy/database`の名前）を使った。
+- **監視**: `sql/pg17-baseline/monitor-delivery-size.sql`を`nexus_public`で日次に実行し、配信表の合計サイズ（TOAST・索引込み）と行数を記録する。`review_required = t`（合計1 GiB超または500行超）なら削除方式の見直しを起票する（E2-5 §3.5）。[architecture.md](architecture.md)の日次確認に含めた。
+
 ## 4. Issue #7 の受け入れ条件（正式、契約B）
 
 2026-10-18正式化。旧文「read-only roleでDB書き込みが拒否される」は契約Bと矛盾するため、次の条件で置き換える。すべて使い捨てPG17コンテナ・新規volume・ダミーデータで確認し、実本番DB・dump・secretは使わない。**隔離での成功を本番適用済みと記載しない。**
@@ -67,6 +88,31 @@ DB権限（`nexus_public`で接続）:
 
 2026-10-20の[新digest検証結果](pg17-issue-7-digest-verification.md): PR #99を統合した実API/Caddyの採用digestで、上記条件を確認した（隔離volumeは人間の再確認後に個別削除）。本番未適用。初回の不合格から再発行までの経緯は[初回検証記録](pg17-issue-7-verification.md)に残す。
 
+### 4.1 Issue #17 の受け入れ条件（契約Bの改訂、`delivery`）
+
+上記と同じく使い捨てPG17・新規volume・ダミーデータで確認する。**隔離での成功を本番適用済みと記載しない。**
+
+DB権限（`pg17-baseline.py run`の`delivery`部分）:
+
+- [x] `02`がスキーマを1回だけ作り所有をmigratorに渡す（再実行・role名未指定は拒否）。migratorは`CREATE SCHEMA`を拒否される（DBのCREATEなし）
+- [x] `03`が表の欠けた`delivery`、無効化したトリガーを拒否し、正しい形では冪等に再適用できる。権限の一覧が上の表と完全に一致し、所有者以外に`participant_bundles`のUPDATE/DELETE/TRUNCATE、`current_bundle`のDELETE/TRUNCATEを持つroleが無い
+- [x] `nexus_public`: 2表のSELECTだけ成功し、readiness述語にも引き続き合格。2表へのINSERT/UPDATE/DELETE/TRUNCATE、ポインタの後退、`delivery`へのCREATE、`studio`の読み取り、`SET ROLE`は拒否
+- [x] Studioの実行時role: `participant_bundles`のINSERT、`ON CONFLICT`による初回の行の作成とポインタの前進、UPDATEによる前進が成功。ポインタの後退（トリガー）、2行目（CHECK）、存在しない版（外部キー）、`participant_bundles`のUPDATE/DELETE/TRUNCATE、`current_bundle`のDELETE/TRUNCATE、DDL・トリガー無効化、`public`の読み取り、migratorへの`SET ROLE`は拒否
+- [x] 所有者でもポインタの後退はトリガーで拒否。権限の無いroleは2表を読めない
+- [x] `monitor-delivery-size.sql`が`nexus_public`で動き、閾値超過を`review_required`で示す
+
+2026-10-25の結果: [証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal.txt)（NexusMobile `63a3970`、PG17 digest `b0f9560a…`、97項目成功）。表とトリガーはE2-5 §3.1を写した検証専用のDDL（`sql/pg17-baseline/verification/delivery-reference-ddl.sql`）で作った。**Studioの実移行（NexusStudio#11）と#8の実role名で再確認するまで、本番に使う根拠にしない。**
+
+edge（Caddy）経由（E2-5 O-4b、I4。#121を含むpublic-apiの採用digestとCaddy v2.11.4の採用digestで行う。未実施）:
+
+- [ ] 200で接尾辞付きのETagが返る
+- [ ] それを`If-None-Match`で送り返すと304になる（public-apiはETagを完全一致で比べるため、Caddyが接尾辞を外さずに転送すると304にならない）
+- [ ] 200と304で`Nexus-Bundle-Sha256`・`Nexus-Bundle-Version`・`Nexus-Recheck-After`、200で`Nexus-Bundle-Schema`・`Nexus-Bundle-Length`が保たれる
+- [ ] `Content-Length`が無い
+- [ ] `Accept-Encoding`を変えると200になる
+
+304が成立しない場合は、NexusMobile #23に`HEAD /api/v2/bundle`の追加を求める。NexusMobile #23はこの結果を待ってCloseする。
+
 ## 5. 隔離baselineの構築と検証
 
 `compose.pg17-baseline.yml`と`scripts/pg17-baseline.py`は、**現行と同じ形（`nexus`/`nexus`、PG17）の使い捨てコンテナ**を新しい空volumeに作る。`nexus_postgres_data`や既存project名は拒否し、同じエンジンにlive container/volumeがあれば中止する。ポート公開なし。
@@ -80,10 +126,12 @@ export NEXUS_MOBILE_DIR=... PG17_BASELINE_MIGRATE_SQL=... PG17_BASELINE_PROJECT=
   PG17_BASELINE_SECRET_DIR=<新規の絶対パス>
 python3 scripts/pg17-baseline.py preflight
 python3 scripts/pg17-baseline.py manifest   # レビュー用manifest（commit・移行ID・SQLのsha256）
-python3 scripts/pg17-baseline.py run        # 構築と47項目の検証。volumeは自動削除しない
+python3 scripts/pg17-baseline.py run        # 構築と97項目の検証。volumeは自動削除しない
 ```
 
-`run`が確認すること: 空PG17.xの形が現行と一致／`sql/pg17-baseline/01-roles.sql`が1回だけ適用でき再実行は拒否／生成SQLが未知のtableを持つDBを拒否して行を保持／移行適用と冪等な再適用／`grant-runtime.sql`適用／履歴が2本と一致／`nexus`がreadinessに不合格で`nexus_public`が合格／上記3節の許可・拒否の全項目／誤パスワード拒否。結果は`manifest`のSQL hashと合わせて記録する。
+`run`が確認すること: 空PG17.xの形が現行と一致／`sql/pg17-baseline/01-roles.sql`が1回だけ適用でき再実行は拒否／生成SQLが未知のtableを持つDBを拒否して行を保持／移行適用と冪等な再適用／`grant-runtime.sql`適用／履歴が2本と一致／`nexus`がreadinessに不合格で`nexus_public`が合格／上記3節の許可・拒否の全項目／誤パスワード拒否／3.1節の`delivery`（仮のStudio roleと検証専用DDLで、4.1節の全項目）。結果は`manifest`のSQL hashと合わせて記録する。
+
+colima等のVMでは、secretの置き場所（`PG17_BASELINE_SECRET_DIR`）をVMが共有するディレクトリ（既定はホームの下）にする。`/tmp`等は共有されずコンテナ起動に失敗する。
 
 2026-10-01にMacの使い捨てPG17.11で実行し47項目成功した（隔離のみ。本番適用の根拠にしない）。Mobile側の実.NETによる`DatabaseReadiness`（`tools/database verify`）は`nexus_verify`・loopbackを要求するため未実施で、本baselineはその述語をSQLで再現している。実イメージでのreadiness・HTTP確認はIssue #7で行う。
 
@@ -92,7 +140,8 @@ python3 scripts/pg17-baseline.py run        # 構築と47項目の検証。volum
 1. `sql/pg17-baseline/01-roles.sql`（初期化済みクラスタ用に`init-roles.sh`を改変）: `nexus_owner`/`nexus_admin_app`（NOLOGIN）/`nexus_public`（LOGIN、パスワードは環境変数経由）を作成、**DBの所有者を`nexus`から`nexus_owner`へ変更**、`PUBLIC`のDB権限・`public` schema権限を剥奪、`nexus_public`へCONNECT/USAGE。承認論点: DB所有者変更、`PUBLIC`のCONNECT剥奪（現行は`nexus`のみのため影響なしと確認する）、`nexus_migrator`を作らない代わりにsuperuser接続で移行する点、`nexus_admin_app`をNOLOGINで作る点。
 2. `tools/database script`の生成SQL（`manifest`のsha256で固定）。直接`dotnet ef database update`はしない。対象DBは`nexus`、実行者は`SET ROLE nexus_owner`、影響は2表群の新規作成と履歴2行のみ（既存user tableが0件であることを実行直前に再確認）。
 3. `deploy/database/grant-runtime.sql`（`SET ROLE nexus_owner`で実行）。
-4. 同日に行う順序・停止条件: 直前にPG17のバックアップとVPS外コピーと別volume復元（[17→18 gate](transition-postgres-17-to-18.md) Phase 1）が成功していること → 1→2→3の順に適用 → readiness確認。途中失敗時は適用を止め、**down migrationは使わず**、バックアップからの復元（別volume）を判断する。
+4. （Issue #17、Studioの導入時）#8のStudio role・`studio`スキーマの作成後に`sql/pg17-baseline/02-delivery-schema.sql`、Studioのレビュー済み移行（`delivery`の表とトリガー）の後に`sql/pg17-baseline/03-grant-delivery.sql`。どちらもsuperuserで、#8で確定したrole名を`-v`で渡す。影響は空の`delivery`スキーマの新規作成と、その2表への権限だけ（`public`・`studio`は変えない）。
+5. 同日に行う順序・停止条件: 直前にPG17のバックアップとVPS外コピーと別volume復元（[17→18 gate](transition-postgres-17-to-18.md) Phase 1）が成功していること → 1→2→3の順に適用 → readiness確認。途中失敗時は適用を止め、**down migrationは使わず**、バックアップからの復元（別volume）を判断する。
 
 **rollback境界**: `AddInitialPostgreSqlSchema.Down`は`NotSupportedException`。baseline適用後に戻す場合の唯一の手段はバックアップの復元で、適用前のバックアップが無い状態でSQLを実行しない。適用前に失敗した場合は何も変わらない。
 
@@ -100,3 +149,5 @@ python3 scripts/pg17-baseline.py run        # 構築と47項目の検証。volum
 
 - 現行PG17の他の書込元・接続元（`nexus` superuserの利用者）。DB所有者変更・`PUBLIC`権限剥奪の影響
 - PG17イメージのdigest（現行は`postgres:17-alpine`のタグ）と、Mobile採用commit/digestの固定
+- Studioの実行時role・migratorの実名（#8）。確定後に`delivery`の隔離検証を実名とStudioの実移行（NexusStudio#11）で再確認する
+- `delivery`のedge確認（4.1節、#121を含むpublic-apiの採用digestが必要）

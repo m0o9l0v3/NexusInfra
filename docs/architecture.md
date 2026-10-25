@@ -13,7 +13,7 @@ public-api/admin-api/studio-api --db--> PostgreSQL (:5432)
 
 2026-09-24に人間が報告した現行DBはPostgreSQL 17.11、`postgres:17-alpine`、volume `nexus_postgres_data`を`/var/lib/postgresql/data`へマウントしている。私はVPSへ接続していない。現行volumeを自動発見・変更しない。Composeは`nexus-mobile`のPostgreSQL 18/pgBackRest派生イメージ、DB用外部volumeの`/var/lib/postgresql`、バックアップ用外部volumeの`/backup`という契約に合わせた。Studioは同じDBの`studio` schemaを使う。実VPSのイメージ・volume・データ配置が一致するか確認するまで適用不可。
 
-RAM 4GBではPrometheus/Grafanaは初期導入しない。systemdタイマーの結果、`scripts/healthcheck.sh`、`docker compose ps`、Docker logs、`df`、`free`、`uptime`を日次確認する。disk 80%で調査、90%で更新停止と容量対処。バックアップ成功時刻が26時間を超える、コンテナ不健康、TLS残存30日未満なら対応する。通知は既存の経路が確定してから設定し、未設定の間は人が毎日確認する。TLS期限は`echo | openssl s_client -connect "$API_DOMAIN:443" -servername "$API_DOMAIN" 2>/dev/null | openssl x509 -noout -enddate`をドメインごとに確認する。
+RAM 4GBではPrometheus/Grafanaは初期導入しない。systemdタイマーの結果、`scripts/healthcheck.sh`、`docker compose ps`、Docker logs、`df`、`free`、`uptime`を日次確認する。disk 80%で調査、90%で更新停止と容量対処。配信表（`delivery`）を置いた後は、`sql/pg17-baseline/monitor-delivery-size.sql`を`nexus_public`で実行して配信表の合計サイズと行数も記録し、`review_required`が`t`（合計1 GiB超または500行超、E2-5 §3.5）なら削除方式の見直しを起票する。配信表はDBとバックアップの大きさに含まれるので、ディスク・バックアップの見積もりにも加える。バックアップ成功時刻が26時間を超える、コンテナ不健康、TLS残存30日未満なら対応する。通知は既存の経路が確定してから設定し、未設定の間は人が毎日確認する。TLS期限は`echo | openssl s_client -connect "$API_DOMAIN:443" -servername "$API_DOMAIN" 2>/dev/null | openssl x509 -noout -enddate`をドメインごとに確認する。
 
 ## イメージと更新
 

@@ -95,6 +95,44 @@ assert re.search(r"CREATE ROLE nexus_admin_app NOLOGIN", code) and re.search(r"C
 assert "CREATE ROLE nexus_migrator" not in code
 assert "170000 AND 179999" in code and "ON_ERROR_STOP" in code
 
+# --- delivery schema and grants (contract B revision, Infra #17)
+def sql_code(name):
+    text = (ROOT / "sql/pg17-baseline" / name).read_text()
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("--"))
+
+
+schema_sql = sql_code("02-delivery-schema.sql")
+assert 'CREATE SCHEMA delivery AUTHORIZATION :"studio_migrator";' in schema_sql
+assert "REVOKE ALL ON SCHEMA delivery FROM PUBLIC;" in schema_sql
+assert 'GRANT USAGE ON SCHEMA delivery TO :"studio_app", nexus_public;' in schema_sql
+assert not re.search(r"GRANT\s+(CREATE|ALL)[^;]*ON\s+DATABASE", schema_sql, re.IGNORECASE), "migrator must not get CREATE on the database"
+assert not re.search(r"CREATE ROLE|ALTER ROLE|DEFAULT PRIVILEGES|\bstudio\.", schema_sql, re.IGNORECASE)
+assert "170000 AND 179999" in schema_sql and "ON_ERROR_STOP" in schema_sql and "Schema delivery already exists" in schema_sql
+
+grant_sql = sql_code("03-grant-delivery.sql")
+grants = re.findall(r"GRANT ([^;]+);", grant_sql)
+assert sorted(grants) == sorted([
+    'SELECT, INSERT ON delivery.participant_bundles TO :"studio_app"',
+    'SELECT, INSERT, UPDATE ON delivery.current_bundle TO :"studio_app"',
+    "SELECT ON delivery.participant_bundles, delivery.current_bundle TO nexus_public",
+]), grants
+assert not re.search(r"DEFAULT PRIVILEGES|ON ALL TABLES[^;]*\bTO\b|\bstudio\.", grant_sql, re.IGNORECASE)
+assert "tgtype & 19 = 19" in grant_sql and "170000 AND 179999" in grant_sql
+
+for name in ("02-delivery-schema.sql", "03-grant-delivery.sql"):
+    code = sql_code(name)
+    assert code.count("RAISE EXCEPTION 'Set -v") == 2 and "\\quit" not in code, name
+
+monitor_sql = sql_code("monitor-delivery-size.sql")
+assert "BEGIN READ ONLY;" in monitor_sql and "\\set max_bytes 1073741824" in monitor_sql and "\\set max_rows 500" in monitor_sql
+assert not re.search(r"\b(INSERT|UPDATE|DELETE|TRUNCATE|GRANT|CREATE)\b", monitor_sql)
+
+reference = (ROOT / "sql/pg17-baseline/verification/delivery-reference-ddl.sql").read_text()
+assert "VERIFICATION ONLY" in reference and "BEFORE UPDATE ON delivery.current_bundle" in reference
+assert "payload         bytea" in reference and "CHECK (singleton)" in reference
+assert set(baseline.DELIVERY_GRANTS["nexus_public"]) == set(baseline.DELIVERY_TABLES)
+assert all(privs == {"SELECT"} for privs in baseline.DELIVERY_GRANTS["nexus_public"].values())
+
 # --- disposable compose file
 compose = yaml.safe_load((ROOT / "compose.pg17-baseline.yml").read_text())
 assert set(compose["services"]) == {"postgres"}

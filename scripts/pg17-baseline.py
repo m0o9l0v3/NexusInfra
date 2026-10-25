@@ -32,6 +32,18 @@ READINESS_SQL = ("SELECT r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rol
                  "OR pg_has_role(current_user, 'nexus_owner', 'MEMBER') "
                  "OR has_schema_privilege(current_user, 'public', 'CREATE') "
                  "FROM pg_roles r WHERE r.rolname = current_user")
+# Stand-ins for the Studio roles until Infra #8 fixes the real names (NexusStudio deploy/database).
+STUDIO_MIGRATOR = "nexus_studio_migrator"
+STUDIO_APP = "nexus_studio_app"
+DELIVERY_TABLES = ["current_bundle", "participant_bundles"]
+TABLE_PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]
+# Contract B revision (E2-5 §3.2): exact table privileges per role; anything not listed must be absent.
+DELIVERY_GRANTS = {
+    STUDIO_APP: {"participant_bundles": {"SELECT", "INSERT"}, "current_bundle": {"SELECT", "INSERT", "UPDATE"}},
+    "nexus_public": {"participant_bundles": {"SELECT"}, "current_bundle": {"SELECT"}},
+    "nexus_admin_app": {},
+    "nexus_verify_other": {},
+}
 
 
 class Failure(SystemExit):
@@ -114,11 +126,16 @@ def check_public_api_startup(mobile: Path) -> list:
     return errors
 
 
+DELIVERY_SQL = ["02-delivery-schema.sql", "03-grant-delivery.sql", "monitor-delivery-size.sql",
+                "verification/delivery-reference-ddl.sql"]
+
+
 def manifest(mobile: Path, migrate_sql: Path) -> dict:
     errors = []
     grant = mobile / "deploy/database/grant-runtime.sql"
     roles = ROOT / "sql/pg17-baseline/01-roles.sql"
-    for path in (grant, migrate_sql, roles):
+    delivery = {name: ROOT / "sql/pg17-baseline" / name for name in DELIVERY_SQL}
+    for path in (grant, migrate_sql, roles, *delivery.values()):
         if not path.is_file():
             fail(f"Missing review input: {path}")
     discoverable = migration_ids_in_source(mobile)
@@ -137,8 +154,10 @@ def manifest(mobile: Path, migrate_sql: Path) -> dict:
     return {
         "nexus_mobile_commit": commit,
         "migrations": discoverable,
-        "files": {"roles_sql": sha256(roles), "migrate_sql": sha256(migrate_sql), "grant_runtime_sql": sha256(grant)},
+        "files": {"roles_sql": sha256(roles), "migrate_sql": sha256(migrate_sql), "grant_runtime_sql": sha256(grant),
+                  **{name: sha256(path) for name, path in delivery.items()}},
         "visit_logs_contract": "B: INSERT + SELECT(chain_id, created_at, hash) only",
+        "delivery_contract": "B rev. Infra #17: nexus_public SELECT on delivery.participant_bundles/current_bundle only",
     }
 
 
@@ -164,7 +183,7 @@ class Rehearsal:
             fail(f"Command failed ({result.returncode}): {args[0]} {args[1] if len(args) > 1 else ''}\n{result.stdout}")
         return result
 
-    def psql(self, role, sql, *, db="nexus", host="postgres", password_env=None, input_sql=None, check=True, passthrough=()):
+    def psql(self, role, sql, *, db="nexus", host="postgres", password_env=None, input_sql=None, check=True, passthrough=(), variables=None):
         cmd = self.compose + ["exec", "-T"]
         extra = {}
         if password_env:
@@ -173,6 +192,8 @@ class Rehearsal:
         for key in passthrough:
             cmd += ["-e", key]
         cmd += ["postgres", "psql", "-h", host, "-U", role, "-d", db, "-X", "-At", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=sqlstate"]
+        for key, value in (variables or {}).items():
+            cmd += ["-v", f"{key}={value}"]
         if input_sql is None:
             cmd += ["-c", sql]
         return self.run(cmd, stdin=input_sql, extra_env=extra, check=check)
@@ -181,17 +202,17 @@ class Rehearsal:
         self.passed.append(name)
         print("PASS: " + name, flush=True)
 
-    def allowed(self, name, sql, **kw):
-        result = self.psql("nexus_public", sql, password_env=self.public_password, **kw)
+    def allowed(self, name, sql, *, role="nexus_public", **kw):
+        result = self.psql(role, sql, password_env=self.passwords[role], **kw)
         if result.returncode != 0:
             fail(f"Expected success: {name}\n{result.stdout}")
         self.ok(name)
         return result.stdout.strip()
 
-    def denied(self, name, sql):
-        result = self.psql("nexus_public", sql, password_env=self.public_password, check=False)
-        if result.returncode == 0 or "42501" not in result.stdout:
-            fail(f"Expected permission denied (42501): {name}\n{result.stdout}")
+    def denied(self, name, sql, *, role="nexus_public", sqlstate="42501"):
+        result = self.psql(role, sql, password_env=self.passwords[role], check=False)
+        if result.returncode == 0 or sqlstate not in result.stdout:
+            fail(f"Expected rejection ({sqlstate}): {name}\n{result.stdout}")
         self.ok("denied: " + name)
 
     def setup(self):
@@ -213,6 +234,7 @@ class Rehearsal:
             fail("Secret directory already exists; use a new path")
         secret_dir.mkdir(mode=0o700, parents=True)
         self.public_password = secrets.token_hex(24)
+        self.passwords = {"nexus_public": self.public_password}
         for name, value in (("baseline_password", secrets.token_hex(24)), ("public_password", self.public_password)):
             path = secret_dir / name
             path.write_text(value)
@@ -314,6 +336,138 @@ class Rehearsal:
         if count != "2":
             fail("Migration replay changed the history")
 
+    def verify_delivery(self):
+        """Contract B revision (Infra #17, E2-5 §3.2): delivery schema owned by the Studio migrator."""
+        for role in (STUDIO_MIGRATOR, STUDIO_APP, "nexus_verify_other"):
+            self.passwords[role] = secrets.token_hex(24)
+        p = self.passwords
+        # Stand-in for the Studio setup of Infra #8: two LOGIN roles, schema studio owned by the migrator.
+        self.psql("nexus", "", host="localhost", input_sql=(
+            f"CREATE ROLE {STUDIO_MIGRATOR} LOGIN PASSWORD '{p[STUDIO_MIGRATOR]}';\n"
+            f"CREATE ROLE {STUDIO_APP} LOGIN PASSWORD '{p[STUDIO_APP]}';\n"
+            f"CREATE ROLE nexus_verify_other LOGIN PASSWORD '{p['nexus_verify_other']}';\n"
+            f"GRANT CONNECT ON DATABASE nexus TO {STUDIO_MIGRATOR}, {STUDIO_APP}, nexus_verify_other;\n"
+            f"CREATE SCHEMA studio AUTHORIZATION {STUDIO_MIGRATOR};\nREVOKE ALL ON SCHEMA studio FROM PUBLIC;\n"
+            f"GRANT USAGE ON SCHEMA studio TO {STUDIO_APP};\n"
+            f"SET ROLE {STUDIO_MIGRATOR};\nCREATE TABLE studio.releases (sequence bigint PRIMARY KEY, release_id uuid NOT NULL);\n"
+            f"RESET ROLE;\nGRANT SELECT, INSERT ON studio.releases TO {STUDIO_APP};\n"))
+        self.ok("stand-in Studio roles and studio schema created (real names come from Infra #8)")
+        self.denied("Studio migrator CREATE SCHEMA (no CREATE on the database)", "CREATE SCHEMA forbidden", role=STUDIO_MIGRATOR)
+
+        names = {"studio_migrator": STUDIO_MIGRATOR, "studio_app": STUDIO_APP}
+        base = ROOT / "sql/pg17-baseline"
+        schema_sql, grant_sql = (base / "02-delivery-schema.sql").read_text(), (base / "03-grant-delivery.sql").read_text()
+        exists = "SELECT to_regnamespace('delivery') IS NOT NULL"
+        unset = self.psql("nexus", "", host="localhost", input_sql=schema_sql, variables={"studio_app": STUDIO_APP}, check=False)
+        if unset.returncode == 0 or self.psql("nexus", exists, host="localhost").stdout.strip() != "f":
+            fail("02-delivery-schema.sql must fail without the Studio role variables")
+        self.ok("02-delivery-schema.sql refuses to run without the Studio role names")
+        self.psql("nexus", "", host="localhost", input_sql=schema_sql, variables=names)
+        if self.psql("nexus", "", host="localhost", input_sql=schema_sql, variables=names, check=False).returncode == 0:
+            fail("02-delivery-schema.sql must not be re-runnable silently")
+        owner = self.psql("nexus", "SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'delivery'", host="localhost").stdout.strip()
+        if owner != STUDIO_MIGRATOR:
+            fail(f"delivery must be owned by the Studio migrator, got {owner}")
+        self.ok("delivery schema pre-created once and handed to the Studio migrator; a second run is rejected")
+        if self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names, check=False).returncode == 0:
+            fail("03-grant-delivery.sql must refuse a delivery schema without the reviewed tables")
+        self.ok("03-grant-delivery.sql refuses a delivery schema without the reviewed tables")
+        ddl = (base / "verification/delivery-reference-ddl.sql").read_text()
+        self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=ddl)
+        self.ok("reference DDL (E2-5 §3.1, stand-in for NexusStudio#11) created by the Studio migrator")
+        self.psql(STUDIO_MIGRATOR, "ALTER TABLE delivery.current_bundle DISABLE TRIGGER current_bundle_monotonic", password_env=p[STUDIO_MIGRATOR])
+        if self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names, check=False).returncode == 0:
+            fail("03-grant-delivery.sql must refuse current_bundle without an enabled monotonic trigger")
+        self.psql(STUDIO_MIGRATOR, "ALTER TABLE delivery.current_bundle ENABLE TRIGGER current_bundle_monotonic", password_env=p[STUDIO_MIGRATOR])
+        self.ok("03-grant-delivery.sql refuses current_bundle while the monotonic trigger is disabled")
+        self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names)
+        self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names)
+        self.ok("03-grant-delivery.sql applied, then re-applied idempotently")
+
+        checks = ",".join(f"('{role}','{table}','{priv}')" for role in DELIVERY_GRANTS for table in DELIVERY_TABLES for priv in TABLE_PRIVILEGES)
+        granted = self.psql("nexus", f"SELECT r || ':' || t || ':' || pv FROM (VALUES {checks}) AS c(r, t, pv) "
+                            "WHERE has_table_privilege(r, 'delivery.' || t, pv) ORDER BY 1", host="localhost").stdout.split()
+        expected = sorted(f"{role}:{table}:{priv}" for role, tables in DELIVERY_GRANTS.items() for table, privs in tables.items() for priv in privs)
+        if granted != expected:
+            fail(f"delivery privileges differ from contract B:\n got {granted}\n want {expected}")
+        self.ok("delivery table privileges match the contract B matrix exactly")
+        writers = self.psql("nexus", "SELECT string_agg(rolname, ',') FROM pg_roles WHERE NOT rolsuper AND rolname NOT LIKE 'pg\\_%' "
+                            f"AND rolname <> '{STUDIO_MIGRATOR}' AND (has_table_privilege(rolname, 'delivery.participant_bundles', 'UPDATE, DELETE, TRUNCATE') "
+                            "OR has_table_privilege(rolname, 'delivery.current_bundle', 'DELETE, TRUNCATE'))", host="localhost").stdout.strip()
+        if writers:
+            fail(f"No role but the owner may UPDATE/DELETE/TRUNCATE the delivery tables: {writers}")
+        self.ok("no non-owner role can UPDATE/DELETE/TRUNCATE participant_bundles or DELETE/TRUNCATE current_bundle")
+
+        def bundle(version):
+            return ("INSERT INTO delivery.participant_bundles VALUES "
+                    f"({version}, gen_random_uuid(), '2.0.0', convert_to('{{\"v\":{version}}}', 'UTF8'), "
+                    f"encode(sha256(convert_to('{{\"v\":{version}}}', 'UTF8')), 'hex'), octet_length('{{\"v\":{version}}}'), now())")
+
+        def point(version):
+            return ("INSERT INTO delivery.current_bundle (bundle_version, updated_at) VALUES "
+                    f"({version}, now()) ON CONFLICT (singleton) DO UPDATE SET bundle_version = EXCLUDED.bundle_version, updated_at = EXCLUDED.updated_at")
+
+        app = {"role": STUDIO_APP}
+        self.allowed("Studio runtime: SELECT both delivery tables (empty)", "SELECT count(*) FROM delivery.participant_bundles, delivery.current_bundle", **app)
+        self.allowed("Studio runtime: INSERT participant_bundles", bundle(10), **app)
+        self.allowed("Studio runtime: first pointer row by INSERT ... ON CONFLICT", point(10), **app)
+        self.allowed("Studio runtime: INSERT a later bundle (versions may skip)", bundle(12), **app)
+        self.allowed("Studio runtime: advance the pointer by ON CONFLICT DO UPDATE", point(12), **app)
+        self.allowed("Studio runtime: INSERT the next bundle", bundle(13), **app)
+        self.allowed("Studio runtime: advance the pointer by UPDATE", "UPDATE delivery.current_bundle SET bundle_version = 13, updated_at = now()", **app)
+        for name, sql, state in [
+            ("Studio runtime: pointer rollback by ON CONFLICT DO UPDATE (trigger)", point(10), "23514"),
+            ("Studio runtime: pointer rollback by UPDATE (trigger)", "UPDATE delivery.current_bundle SET bundle_version = 12", "23514"),
+            ("Studio runtime: second pointer row (CHECK singleton)", "INSERT INTO delivery.current_bundle VALUES (false, 13, now())", "23514"),
+            ("Studio runtime: duplicate pointer INSERT (primary key)", "INSERT INTO delivery.current_bundle (bundle_version, updated_at) VALUES (13, now())", "23505"),
+            ("Studio runtime: pointer to a missing bundle (foreign key)", point(99), "23503"),
+            ("Studio runtime: UPDATE participant_bundles", "UPDATE delivery.participant_bundles SET schema_version = 'x'", "42501"),
+            ("Studio runtime: DELETE participant_bundles", "DELETE FROM delivery.participant_bundles", "42501"),
+            ("Studio runtime: TRUNCATE participant_bundles", "TRUNCATE delivery.participant_bundles", "42501"),
+            ("Studio runtime: DELETE current_bundle", "DELETE FROM delivery.current_bundle", "42501"),
+            ("Studio runtime: TRUNCATE current_bundle", "TRUNCATE delivery.current_bundle", "42501"),
+            ("Studio runtime: CREATE TABLE in delivery", "CREATE TABLE delivery.forbidden (id integer)", "42501"),
+            ("Studio runtime: ALTER TABLE participant_bundles", "ALTER TABLE delivery.participant_bundles ADD COLUMN forbidden text", "42501"),
+            ("Studio runtime: disable the monotonic trigger", "ALTER TABLE delivery.current_bundle DISABLE TRIGGER current_bundle_monotonic", "42501"),
+            ("Studio runtime: SELECT public.spots", "SELECT * FROM public.spots", "42501"),
+            (f"Studio runtime: SET ROLE {STUDIO_MIGRATOR}", f"SET ROLE {STUDIO_MIGRATOR}", "42501"),
+        ]:
+            self.denied(name, sql, role=STUDIO_APP, sqlstate=state)
+        self.denied("Studio migrator (owner): pointer rollback (trigger binds the owner too)",
+                    "UPDATE delivery.current_bundle SET bundle_version = 10", role=STUDIO_MIGRATOR, sqlstate="23514")
+
+        if self.allowed("nexus_public: SELECT delivery.current_bundle", "SELECT bundle_version FROM delivery.current_bundle WHERE singleton") != "13":
+            fail("nexus_public must read the current pointer")
+        if self.allowed("nexus_public: SELECT delivery.participant_bundles (public-api query)",
+                        "SELECT encode(sha256(payload), 'hex') = rtrim(sha256) FROM delivery.participant_bundles WHERE bundle_version = 13") != "t":
+            fail("Stored payload bytes must match the stored SHA-256")
+        if self.allowed("nexus_public: DatabaseReadiness predicate still passes", READINESS_SQL) != "f":
+            fail("nexus_public must still pass the readiness predicate")
+        for name, sql in [
+            ("INSERT participant_bundles", bundle(14)),
+            ("UPDATE participant_bundles", "UPDATE delivery.participant_bundles SET schema_version = 'x'"),
+            ("DELETE participant_bundles", "DELETE FROM delivery.participant_bundles"),
+            ("TRUNCATE participant_bundles", "TRUNCATE delivery.participant_bundles"),
+            ("INSERT current_bundle", point(13)),
+            ("UPDATE current_bundle (pointer rollback)", "UPDATE delivery.current_bundle SET bundle_version = 10"),
+            ("DELETE current_bundle", "DELETE FROM delivery.current_bundle"),
+            ("TRUNCATE current_bundle", "TRUNCATE delivery.current_bundle"),
+            ("CREATE TABLE in delivery", "CREATE TABLE delivery.forbidden (id integer)"),
+            ("SELECT studio.releases", "SELECT * FROM studio.releases"),
+            (f"SET ROLE {STUDIO_MIGRATOR}", f"SET ROLE {STUDIO_MIGRATOR}"),
+        ]:
+            self.denied("nexus_public: " + name, sql)
+        for table in DELIVERY_TABLES:
+            self.denied(f"other role: SELECT delivery.{table}", f"SELECT * FROM delivery.{table}", role="nexus_verify_other")
+
+        monitor = (base / "monitor-delivery-size.sql").read_text()
+        for variables, want in (({}, "f"), ({"max_rows": "2"}, "t"), ({"max_bytes": "1"}, "t")):
+            line = self.psql("nexus_public", "", password_env=p["nexus_public"], input_sql=monitor, variables=variables).stdout.splitlines()
+            row = [v for v in line if v.count("|") == 3]
+            if len(row) != 1 or row[0].split("|")[0] != "3" or row[0].split("|")[3] != want:
+                fail(f"monitor-delivery-size.sql reported {line} with {variables}, expected 3 rows and review_required={want}")
+        self.ok("monitor-delivery-size.sql runs as nexus_public and flags the review thresholds")
+
     def cleanup(self):
         if not self.started:
             print("Nothing was started by this run; no containers were touched.")
@@ -341,6 +495,7 @@ def main(argv: list) -> None:
                 rehearsal.setup()
                 rehearsal.apply()
                 rehearsal.verify()
+                rehearsal.verify_delivery()
                 print(f"PASS: {len(rehearsal.passed)} baseline checks (disposable only; nothing was applied to production)")
             finally:
                 rehearsal.cleanup()

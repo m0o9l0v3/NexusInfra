@@ -11,3 +11,4 @@ secrets/
 backups/
 .DS_Store
 !sql/pg17-baseline/*.sql
+!sql/pg17-baseline/verification/*.sql
