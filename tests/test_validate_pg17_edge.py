@@ -115,6 +115,16 @@ def test_mount_identity():
         link.symlink_to(other.parent, target_is_directory=True)
         invoke("./link/Caddyfile.pg17-api", checked, False)
         count += 6
+        if sys.platform == "darwin":
+            # APFS opens NFC and NFD spellings of one path as the same file; Compose prints NFC.
+            import unicodedata
+            named = folder / "アプリ開発"
+            named.mkdir()
+            nfc = named / "Caddyfile.pg17-api"
+            nfc.write_text(CADDY)
+            invoke(unicodedata.normalize("NFD", str(nfc)), nfc, True)
+            invoke(unicodedata.normalize("NFD", str(other)), nfc, False)
+            count += 2
 
 
 def main():

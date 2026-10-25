@@ -106,6 +106,14 @@ def caddy_tokens(text):
     return list(lexer)
 
 
+def same_file(a: Path, b: Path) -> bool:
+    """File identity, not spelling: macOS reports non-ASCII paths in a different Unicode form than Compose."""
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return a.resolve() == b.resolve()
+
+
 def validate(data, resolved=False, isolation=False, *, compose_dir=ROOT, caddyfile=ROOT / "Caddyfile.pg17-api"):
     errors = []
 
@@ -161,8 +169,7 @@ def validate(data, resolved=False, isolation=False, *, compose_dir=ROOT, caddyfi
             check(not resolved or source_path.is_absolute(), "resolved Caddyfile mount source must be absolute")
             if not source_path.is_absolute():
                 source_path = compose_dir / source_path
-            check(source_path.name == "Caddyfile.pg17-api" and read_only
-                  and source_path.resolve() == caddyfile.resolve(),
+            check(source_path.name == "Caddyfile.pg17-api" and read_only and same_file(source_path, caddyfile),
                   "Caddyfile mount must be the exact file validated, mounted read-only")
         else:
             check(source == {"/data": "caddy_data", "/config": "caddy_config"}.get(target) and not read_only,
