@@ -103,15 +103,15 @@ DB権限（`pg17-baseline.py run`の`delivery`部分）:
 
 2026-10-25の結果: [初回の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal.txt)（NexusMobile `63a3970`、PG17 digest `b0f9560a…`、97項目成功）。PR #18のレビューを受けて`03`のトリガー照合を名前と関数に絞り、[再実行の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal-trigger-guard.txt)で98項目成功。表とトリガーはE2-5 §3.1を写した検証専用のDDL（`sql/pg17-baseline/verification/delivery-reference-ddl.sql`）で作った。**Studioの実移行（NexusStudio#11）と#8の実role名で再確認するまで、本番に使う根拠にしない。**
 
-edge（Caddy）経由（E2-5 O-4b、I4。#121を含むpublic-apiの採用digestとCaddy v2.11.4の採用digestで行う。未実施）:
+edge（Caddy）経由（E2-5 O-4b、I4）。2026-10-25に隔離環境で実施した（API `sha256:9fa4f1fe…`（source `63a3970`）、Caddy v2.11.4 `sha256:040e9f74…`、[記録](pg17-issue-17-i4-publication.md) 5節）。gzip・zstdのそれぞれで、35,946バイトと2,016バイトのダミーbundleを使って確かめた:
 
-- [ ] 200で接尾辞付きのETagが返る
-- [ ] それを`If-None-Match`で送り返すと304になる（public-apiはETagを完全一致で比べるため、Caddyが接尾辞を外さずに転送すると304にならない）
-- [ ] 200と304で`Nexus-Bundle-Sha256`・`Nexus-Bundle-Version`・`Nexus-Recheck-After`、200で`Nexus-Bundle-Schema`・`Nexus-Bundle-Length`が保たれる
-- [ ] `Content-Length`が無い
-- [ ] `Accept-Encoding`を変えると200になる
+- [x] 200で接尾辞付きのETag（`"sha256-<hex>-gzip"`・`"-zstd"`）が返る。圧縮なしでは接尾辞なし
+- [x] それを`If-None-Match`で送り返すと304になる（Caddyが接尾辞を外して転送する）。304のETagは接尾辞なし
+- [x] 200と304で`Nexus-Bundle-Sha256`・`Nexus-Bundle-Version`・`Nexus-Recheck-After`、200で`Nexus-Bundle-Schema`・`Nexus-Bundle-Length`が変わらずに保たれる。304には後の2つが付かない
+- [x] `Content-Length`: 上流（public-api）の値は残らない。**ただし圧縮後の本体が小さいときは、圧縮後の大きさの`Content-Length`が付く**（2,016バイトのbundleでgzip 297・zstd 263。35,946バイトでは付かず、HTTP/1.1はchunked）。非圧縮の大きさは常に`Nexus-Bundle-Length`だけで分かる。「無い」の文言どおりではないため、扱いはNexusMobile #23・E2-5 §4.1.1側で確認する
+- [x] `Accept-Encoding`を変えると200になる（gzipのETagをzstd・圧縮なしで送る、およびその逆）
 
-304が成立しない場合は、NexusMobile #23に`HEAD /api/v2/bundle`の追加を求める。NexusMobile #23はこの結果を待ってCloseする。
+304は成立したため、`HEAD /api/v2/bundle`の追加は求めない。NexusMobile #23はこの結果を待ってCloseする（`Content-Length`の注記を含めて#23に伝える）。
 
 ## 5. 隔離baselineの構築と検証
 
@@ -150,4 +150,4 @@ colima等のVMでは、secretの置き場所（`PG17_BASELINE_SECRET_DIR`）をV
 - 現行PG17の他の書込元・接続元（`nexus` superuserの利用者）。DB所有者変更・`PUBLIC`権限剥奪の影響
 - PG17イメージのdigest（現行は`postgres:17-alpine`のタグ）と、Mobile採用commit/digestの固定
 - Studioの実行時role・migratorの実名（#8）。確定後に`delivery`の隔離検証を実名とStudioの実移行（NexusStudio#11）で再確認する
-- `delivery`のedge確認（4.1節、#121を含むpublic-apiの採用digestが必要）
+- `Content-Length`の注記（4.1節）をE2-5 §4.1.1・NexusMobile #23で反映するか

@@ -1,0 +1,29 @@
+# Issue #17 I4 teardown, 2026-10-25 17:38 JST
+$ docker-compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml down
+ Container nexus-edge-pg17-caddy-1 Stopping 
+ Container nexus-edge-pg17-caddy-1 Stopped 
+ Container nexus-edge-pg17-caddy-1 Removing 
+ Container nexus-edge-pg17-caddy-1 Removed 
+ Container nexus-edge-pg17-public-api-1 Stopping 
+ Container nexus-edge-pg17-public-api-1 Stopped 
+ Container nexus-edge-pg17-public-api-1 Removing 
+ Container nexus-edge-pg17-public-api-1 Removed 
+ Network nexus-edge-pg17_edge Removing 
+ Network nexus-edge-pg17_public Removing 
+ Network nexus-edge-pg17_edge Removed 
+ Network nexus-edge-pg17_public Removed 
+$ docker-compose -p nexus-pg17-edge-iso-i17-i4-20261025 -f compose.pg17-edge-isolation.yml down
+ Container nexus-pg17-edge-iso-i17-i4-20261025-postgres-1 Stopping 
+ Container nexus-pg17-edge-iso-i17-i4-20261025-postgres-1 Stopped 
+ Container nexus-pg17-edge-iso-i17-i4-20261025-postgres-1 Removing 
+ Container nexus-pg17-edge-iso-i17-i4-20261025-postgres-1 Removed 
+ Network nexus-pg17-edge-iso-i17-i4-20261025-net Removing 
+ Network nexus-pg17-edge-iso-i17-i4-20261025-net Removed 
+# remaining containers of both projects:
+# kept volumes (remove individually after review):
+nexus-edge-pg17_caddy_config
+nexus-edge-pg17_caddy_data
+nexus-pg17-baseline-i17-20261025-db
+nexus-pg17-baseline-i17-20261025b-db
+nexus-pg17-edge-iso-i17-i4-20261025-db
+# down -v / prune not used
