@@ -1,0 +1,60 @@
+# Caddy v2.11.4 caddy@sha256:040e9f74... in front of public-api @sha256:9fa4f1fe... (api.localhost, internal CA, curl -k from the Mac host)
+PASS: [bundle 21, 35946 bytes] identity: 200, unsuffixed strong ETag "sha256-<Nexus-Bundle-Sha256>" ("sha256-9bf8cc7ea5c778c50c4c13825bd9d8ca8d89c5db648abad1f8920c3a946b5307")
+PASS: [bundle 21, 35946 bytes] identity: body matches Nexus-Bundle-Sha256 and Nexus-Bundle-Length (35946 bytes, version 21)
+PASS: [bundle 21, 35946 bytes] identity: all Nexus-Bundle-* and Nexus-Recheck-After present
+PASS: [bundle 21, 35946 bytes] gzip: 200 with Content-Encoding gzip and suffixed ETag ("sha256-9bf8cc7ea5c778c50c4c13825bd9d8ca8d89c5db648abad1f8920c3a946b5307-gzip")
+PASS: [bundle 21, 35946 bytes] gzip: Nexus-Bundle-* and Nexus-Recheck-After preserved unchanged
+PASS: [bundle 21, 35946 bytes] gzip HTTP/2: no Content-Length (transfer-encoding: n/a (HTTP/2 frames))
+PASS: [bundle 21, 35946 bytes] gzip HTTP/1.1: no Content-Length (transfer-encoding: chunked)
+PASS: [bundle 21, 35946 bytes] gzip: decompressed body matches Nexus-Bundle-Sha256
+PASS: [bundle 21, 35946 bytes] gzip: suffixed ETag sent back in If-None-Match -> 304 (304)
+PASS: [bundle 21, 35946 bytes] gzip: 304 keeps Nexus-Bundle-Sha256/Version and Nexus-Recheck-After
+PASS: [bundle 21, 35946 bytes] gzip: 304 carries no Nexus-Bundle-Schema/Length (200 only)
+NOTE: [bundle 21, 35946 bytes] gzip 304 ETag = "sha256-9bf8cc7ea5c778c50c4c13825bd9d8ca8d89c5db648abad1f8920c3a946b5307"
+PASS: [bundle 21, 35946 bytes] gzip ETag with Accept-Encoding zstd -> 200 (full body) (200)
+PASS: [bundle 21, 35946 bytes] gzip ETag with Accept-Encoding identity -> 200 (full body) (200)
+PASS: [bundle 21, 35946 bytes] zstd: 200 with Content-Encoding zstd and suffixed ETag ("sha256-9bf8cc7ea5c778c50c4c13825bd9d8ca8d89c5db648abad1f8920c3a946b5307-zstd")
+PASS: [bundle 21, 35946 bytes] zstd: Nexus-Bundle-* and Nexus-Recheck-After preserved unchanged
+PASS: [bundle 21, 35946 bytes] zstd HTTP/2: no Content-Length (transfer-encoding: n/a (HTTP/2 frames))
+PASS: [bundle 21, 35946 bytes] zstd HTTP/1.1: no Content-Length (transfer-encoding: chunked)
+PASS: [bundle 21, 35946 bytes] zstd: suffixed ETag sent back in If-None-Match -> 304 (304)
+PASS: [bundle 21, 35946 bytes] zstd: 304 keeps Nexus-Bundle-Sha256/Version and Nexus-Recheck-After
+PASS: [bundle 21, 35946 bytes] zstd: 304 carries no Nexus-Bundle-Schema/Length (200 only)
+NOTE: [bundle 21, 35946 bytes] zstd 304 ETag = "sha256-9bf8cc7ea5c778c50c4c13825bd9d8ca8d89c5db648abad1f8920c3a946b5307"
+PASS: [bundle 21, 35946 bytes] zstd ETag with Accept-Encoding gzip -> 200 (full body) (200)
+PASS: [bundle 21, 35946 bytes] zstd ETag with Accept-Encoding identity -> 200 (full body) (200)
+PASS: [bundle 21, 35946 bytes] identity: unsuffixed ETag sent back -> 304 (304)
+PASS: [bundle 21, 35946 bytes] gzip: stale ETag -> 200 (200)
+PASS: [bundle 21, 35946 bytes] 0 failure(s)
+
+PASS: [bundle 22, small] identity: 200, unsuffixed strong ETag "sha256-<Nexus-Bundle-Sha256>" ("sha256-ea73432074a55c178478dd271d931ff5e723b8846abf4c096e34c895340f6ae4")
+PASS: [bundle 22, small] identity: body matches Nexus-Bundle-Sha256 and Nexus-Bundle-Length (2016 bytes, version 22)
+PASS: [bundle 22, small] identity: all Nexus-Bundle-* and Nexus-Recheck-After present
+PASS: [bundle 22, small] gzip: 200 with Content-Encoding gzip and suffixed ETag ("sha256-ea73432074a55c178478dd271d931ff5e723b8846abf4c096e34c895340f6ae4-gzip")
+PASS: [bundle 22, small] gzip: Nexus-Bundle-* and Nexus-Recheck-After preserved unchanged
+NOTE: [bundle 22, small] gzip HTTP/2: Content-Length 297 = compressed size 297, not the uncompressed 2016 (Go's server sets it when the whole compressed body fits its buffer)
+PASS: [bundle 22, small] gzip HTTP/2: Content-Length, if any, is the compressed size (297)
+NOTE: [bundle 22, small] gzip HTTP/1.1: Content-Length 297 = compressed size 297, not the uncompressed 2016 (Go's server sets it when the whole compressed body fits its buffer)
+PASS: [bundle 22, small] gzip HTTP/1.1: Content-Length, if any, is the compressed size (297)
+PASS: [bundle 22, small] gzip: decompressed body matches Nexus-Bundle-Sha256
+PASS: [bundle 22, small] gzip: suffixed ETag sent back in If-None-Match -> 304 (304)
+PASS: [bundle 22, small] gzip: 304 keeps Nexus-Bundle-Sha256/Version and Nexus-Recheck-After
+PASS: [bundle 22, small] gzip: 304 carries no Nexus-Bundle-Schema/Length (200 only)
+NOTE: [bundle 22, small] gzip 304 ETag = "sha256-ea73432074a55c178478dd271d931ff5e723b8846abf4c096e34c895340f6ae4"
+PASS: [bundle 22, small] gzip ETag with Accept-Encoding zstd -> 200 (full body) (200)
+PASS: [bundle 22, small] gzip ETag with Accept-Encoding identity -> 200 (full body) (200)
+PASS: [bundle 22, small] zstd: 200 with Content-Encoding zstd and suffixed ETag ("sha256-ea73432074a55c178478dd271d931ff5e723b8846abf4c096e34c895340f6ae4-zstd")
+PASS: [bundle 22, small] zstd: Nexus-Bundle-* and Nexus-Recheck-After preserved unchanged
+NOTE: [bundle 22, small] zstd HTTP/2: Content-Length 263 = compressed size 263, not the uncompressed 2016 (Go's server sets it when the whole compressed body fits its buffer)
+PASS: [bundle 22, small] zstd HTTP/2: Content-Length, if any, is the compressed size (263)
+NOTE: [bundle 22, small] zstd HTTP/1.1: Content-Length 263 = compressed size 263, not the uncompressed 2016 (Go's server sets it when the whole compressed body fits its buffer)
+PASS: [bundle 22, small] zstd HTTP/1.1: Content-Length, if any, is the compressed size (263)
+PASS: [bundle 22, small] zstd: suffixed ETag sent back in If-None-Match -> 304 (304)
+PASS: [bundle 22, small] zstd: 304 keeps Nexus-Bundle-Sha256/Version and Nexus-Recheck-After
+PASS: [bundle 22, small] zstd: 304 carries no Nexus-Bundle-Schema/Length (200 only)
+NOTE: [bundle 22, small] zstd 304 ETag = "sha256-ea73432074a55c178478dd271d931ff5e723b8846abf4c096e34c895340f6ae4"
+PASS: [bundle 22, small] zstd ETag with Accept-Encoding gzip -> 200 (full body) (200)
+PASS: [bundle 22, small] zstd ETag with Accept-Encoding identity -> 200 (full body) (200)
+PASS: [bundle 22, small] identity: unsuffixed ETag sent back -> 304 (304)
+PASS: [bundle 22, small] gzip: stale ETag -> 200 (200)
+PASS: [bundle 22, small] 0 failure(s)

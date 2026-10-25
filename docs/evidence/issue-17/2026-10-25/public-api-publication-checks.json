@@ -1,0 +1,17 @@
+{
+  "checked_at": "2026-10-25 JST",
+  "run": "https://github.com/m0o9l0v3/NexusMobile/actions/runs/40176478031",
+  "run_result": {
+    "preflight": "success",
+    "publish": "success",
+    "attempt": 1
+  },
+  "receipt_artifact": "public-api-image-63a3970da019ee2bc67ff8f5c9b784e572ee4325-1 (public-api.json, public-api.txt)",
+  "source_commit_matches_reviewed": true,
+  "target_platform_matches_approved": true,
+  "receipt_visibility": "private",
+  "anonymous_manifest_fetch_http_status": 401,
+  "workflow_commit": "6f1b07955b59a8122f45e0ade6b76b88bedf3769",
+  "workflow_commit_note": "develop tip at dispatch; 63a3970..6f1b079 is one docs commit (#134); public-api-image.yml and deploy/public-api-image.py unchanged",
+  "pending": "OCI revision label, architecture and runtime UID are checked after pulling for I4 (docker image inspect)"
+}
