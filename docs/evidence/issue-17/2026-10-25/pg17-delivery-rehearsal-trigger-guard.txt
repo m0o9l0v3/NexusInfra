@@ -1,0 +1,121 @@
+# Issue #17 re-run after PR #18 review (03 matches the monotonic trigger by name and function), 2026-10-25. Disposable only; production untouched.
+# NexusMobile 63a3970; image postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+# project nexus-pg17-baseline-i17-20261025b, volume nexus-pg17-baseline-i17-20261025b-db (kept; remove individually after review)
+{
+  "nexus_mobile_commit": "63a3970da019ee2bc67ff8f5c9b784e572ee4325",
+  "migrations": [
+    "20260905120000_AddMapDatasets",
+    "20260919120000_AddInitialPostgreSqlSchema"
+  ],
+  "files": {
+    "roles_sql": "0ec65dce204f27fd01db974cc9508f2e36594cfe1708b0c84af0aca80fd4d65b",
+    "migrate_sql": "7cf58c307611ebec07e617add3f18d7fa65eee30c6de16dc2d989d5e4a9da763",
+    "grant_runtime_sql": "456bbf9836b5fede04fa0d914beaca743456ee84452c63db13479667c8e9c134",
+    "02-delivery-schema.sql": "b71231e47693c3957a04b48fe339fbf769778789fa6fd02068edbe8b3cd65b93",
+    "03-grant-delivery.sql": "f7d516a8ac9488bfa0c3dc1d674b836d54363cff966e3376ae14faceadc590a2",
+    "monitor-delivery-size.sql": "2f463107d5a1b052a2ba97e175e562388d8a6367413a4e1020f2ba277c453ec7",
+    "verification/delivery-reference-ddl.sql": "3a09dce7c535404c2fc9e3bd0f2b2d2336649fbaf934e58422a1b88ec2efb5c1"
+  },
+  "visit_logs_contract": "B: INSERT + SELECT(chain_id, created_at, hash) only",
+  "delivery_contract": "B rev. Infra #17: nexus_public SELECT on delivery.participant_bundles/current_bundle only"
+}
+PASS: empty disposable PG17.11 matches the inventoried live shape
+PASS: role bootstrap applied once; a second run is rejected
+PASS: superuser 'nexus' fails the runtime readiness predicate (NO-GO for the live role)
+PASS: migration SQL refuses a database with unknown tables, rows preserved
+PASS: reviewed migration SQL applied, then replayed idempotently
+PASS: grant-runtime.sql applied as nexus_owner
+PASS: history equals the two reviewed migrations; spots/events/visit_logs exist
+PASS: DatabaseReadiness predicate for nexus_public
+PASS: SELECT spots/events limited to published rows
+PASS: SELECT __EFMigrationsHistory
+PASS: INSERT visit_logs (the only permitted write)
+PASS: SELECT visit_logs(chain_id, created_at, hash) for the audit chain
+PASS: denied: SELECT departments
+PASS: denied: SELECT exhibits
+PASS: denied: SELECT issued_tokens
+PASS: denied: SELECT map_datasets
+PASS: denied: SELECT oc_days
+PASS: denied: SELECT one_time_login_codes
+PASS: denied: SELECT open_campus_timeslots
+PASS: denied: SELECT qr_issues
+PASS: denied: SELECT revoked_jti
+PASS: denied: SELECT timeslot_exhibits
+PASS: denied: SELECT future table (no default privileges)
+PASS: denied: SELECT visit_logs.session_id
+PASS: denied: SELECT visit_logs.*
+PASS: denied: INSERT spots
+PASS: denied: INSERT events
+PASS: denied: UPDATE spots
+PASS: denied: UPDATE events
+PASS: denied: UPDATE visit_logs
+PASS: denied: DELETE spots
+PASS: denied: DELETE events
+PASS: denied: DELETE visit_logs
+PASS: denied: TRUNCATE visit_logs
+PASS: denied: INSERT migration history
+PASS: denied: DELETE migration history
+PASS: denied: CREATE TABLE
+PASS: denied: CREATE SCHEMA
+PASS: denied: ALTER TABLE
+PASS: denied: DROP TABLE
+PASS: denied: CREATE ROLE
+PASS: denied: disable row level security
+PASS: denied: SET ROLE nexus_owner
+PASS: denied: SET ROLE nexus
+PASS: denied: COPY TO PROGRAM
+PASS: denied: wrong password for nexus_public
+PASS: migration replay after grants keeps history and privileges intact
+PASS: stand-in Studio roles and studio schema created (real names come from Infra #8)
+PASS: denied: Studio migrator CREATE SCHEMA (no CREATE on the database)
+PASS: 02-delivery-schema.sql refuses to run without the Studio role names
+PASS: delivery schema pre-created once and handed to the Studio migrator; a second run is rejected
+PASS: 03-grant-delivery.sql refuses a delivery schema without the reviewed tables
+PASS: reference DDL (E2-5 §3.1, stand-in for NexusStudio#11) created by the Studio migrator
+PASS: 03-grant-delivery.sql refuses a disabled monotonic trigger even with another BEFORE UPDATE trigger enabled
+PASS: 03-grant-delivery.sql refuses a current_bundle_monotonic trigger that runs another function
+PASS: 03-grant-delivery.sql applied, then re-applied idempotently
+PASS: delivery table privileges match the contract B matrix exactly
+PASS: no non-owner role can UPDATE/DELETE/TRUNCATE participant_bundles or DELETE/TRUNCATE current_bundle
+PASS: Studio runtime: SELECT both delivery tables (empty)
+PASS: Studio runtime: INSERT participant_bundles
+PASS: Studio runtime: first pointer row by INSERT ... ON CONFLICT
+PASS: Studio runtime: INSERT a later bundle (versions may skip)
+PASS: Studio runtime: advance the pointer by ON CONFLICT DO UPDATE
+PASS: Studio runtime: INSERT the next bundle
+PASS: Studio runtime: advance the pointer by UPDATE
+PASS: denied: Studio runtime: pointer rollback by ON CONFLICT DO UPDATE (trigger)
+PASS: denied: Studio runtime: pointer rollback by UPDATE (trigger)
+PASS: denied: Studio runtime: second pointer row (CHECK singleton)
+PASS: denied: Studio runtime: duplicate pointer INSERT (primary key)
+PASS: denied: Studio runtime: pointer to a missing bundle (foreign key)
+PASS: denied: Studio runtime: UPDATE participant_bundles
+PASS: denied: Studio runtime: DELETE participant_bundles
+PASS: denied: Studio runtime: TRUNCATE participant_bundles
+PASS: denied: Studio runtime: DELETE current_bundle
+PASS: denied: Studio runtime: TRUNCATE current_bundle
+PASS: denied: Studio runtime: CREATE TABLE in delivery
+PASS: denied: Studio runtime: ALTER TABLE participant_bundles
+PASS: denied: Studio runtime: disable the monotonic trigger
+PASS: denied: Studio runtime: SELECT public.spots
+PASS: denied: Studio runtime: SET ROLE nexus_studio_migrator
+PASS: denied: Studio migrator (owner): pointer rollback (trigger binds the owner too)
+PASS: nexus_public: SELECT delivery.current_bundle
+PASS: nexus_public: SELECT delivery.participant_bundles (public-api query)
+PASS: nexus_public: DatabaseReadiness predicate still passes
+PASS: denied: nexus_public: INSERT participant_bundles
+PASS: denied: nexus_public: UPDATE participant_bundles
+PASS: denied: nexus_public: DELETE participant_bundles
+PASS: denied: nexus_public: TRUNCATE participant_bundles
+PASS: denied: nexus_public: INSERT current_bundle
+PASS: denied: nexus_public: UPDATE current_bundle (pointer rollback)
+PASS: denied: nexus_public: DELETE current_bundle
+PASS: denied: nexus_public: TRUNCATE current_bundle
+PASS: denied: nexus_public: CREATE TABLE in delivery
+PASS: denied: nexus_public: SELECT studio.releases
+PASS: denied: nexus_public: SET ROLE nexus_studio_migrator
+PASS: denied: other role: SELECT delivery.current_bundle
+PASS: denied: other role: SELECT delivery.participant_bundles
+PASS: monitor-delivery-size.sql runs as nexus_public and flags the review thresholds
+PASS: 98 baseline checks (disposable only; nothing was applied to production)
+Containers removed. Remove the disposable volume yourself: docker volume rm nexus-pg17-baseline-i17-20261025b-db
