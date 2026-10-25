@@ -39,11 +39,15 @@ BEGIN
     IF tables IS DISTINCT FROM format('current_bundle:%s,participant_bundles:%s', migrator, migrator) THEN
         RAISE EXCEPTION 'delivery must hold exactly current_bundle and participant_bundles owned by % (found %)', migrator, tables;
     END IF;
-    -- E2-5 §3.2: an enabled BEFORE UPDATE row trigger refuses a decreasing bundle_version.
+    -- E2-5 §3.2: the reviewed trigger refuses a decreasing bundle_version. Match it by name and
+    -- function, so another BEFORE UPDATE trigger (audit, timestamp) cannot stand in for it.
     -- tgtype bits: ROW = 1, BEFORE = 2, UPDATE = 16.
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'delivery.current_bundle'::regclass
-                   AND NOT tgisinternal AND tgenabled IN ('O', 'A') AND tgtype & 19 = 19) THEN
-        RAISE EXCEPTION 'delivery.current_bundle lacks the enabled BEFORE UPDATE monotonic trigger';
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_proc f ON f.oid = t.tgfoid
+                   WHERE t.tgrelid = 'delivery.current_bundle'::regclass AND t.tgname = 'current_bundle_monotonic'
+                   AND NOT t.tgisinternal AND t.tgenabled IN ('O', 'A') AND t.tgtype & 19 = 19
+                   AND f.pronamespace = 'delivery'::regnamespace AND f.proname = 'reject_bundle_version_decrease'
+                   AND f.proowner::regrole::text = migrator) THEN
+        RAISE EXCEPTION 'delivery.current_bundle lacks the enabled current_bundle_monotonic trigger (delivery.reject_bundle_version_decrease)';
     END IF;
 END
 $shape$;

@@ -53,7 +53,7 @@ NexusMobile [E2-5](https://github.com/m0o9l0v3/NexusMobile/blob/develop/docs/dec
 
   - `delivery`のUSAGEはStudioの実行時roleと`nexus_public`だけ（`PUBLIC`から剥奪）。default privilegesは設けず、`delivery`に表が増えると`03`は適用を拒否する（契約を先に改訂する）。
   - `participant_bundles`のUPDATE・DELETE・TRUNCATE、`current_bundle`のDELETE・TRUNCATEは誰にも与えない。所有者（migrator）の暗黙の権限は残り、E2-5 §3.5の将来の削除（レビュー済みの手動手順）にだけ使う。
-  - `current_bundle.bundle_version`を減らすUPDATEはBEFORE UPDATEの行トリガーで拒否する（所有者にも効く）。`03`は有効なトリガーが無ければ適用を拒否する。初回の行はStudioが`INSERT … ON CONFLICT (singleton) DO UPDATE`で作る。
+  - `current_bundle.bundle_version`を減らすUPDATEはBEFORE UPDATEの行トリガーで拒否する（所有者にも効く）。トリガー名`current_bundle_monotonic`と関数`delivery.reject_bundle_version_decrease`（migrator所有）は契約の一部で、`03`は名前と関数で照合し、それが有効でなければ適用を拒否する（他のBEFORE UPDATEトリガーでは代わりにならない）。初回の行はStudioが`INSERT … ON CONFLICT (singleton) DO UPDATE`で作る。
   - `nexus_public`は引き続き`studio`スキーマを読めない。public-apiのreadiness述語（上記）は変わらない。
 - **Studioのrole名**: 実名は#8で確定する。`02`/`03`は`-v studio_migrator=… -v studio_app=…`で受け取り、隔離検証では仮名`nexus_studio_migrator`/`nexus_studio_app`（NexusStudio `deploy/database`の名前）を使った。
 - **監視**: `sql/pg17-baseline/monitor-delivery-size.sql`を`nexus_public`で日次に実行し、配信表の合計サイズ（TOAST・索引込み）と行数を記録する。`review_required = t`（合計1 GiB超または500行超）なら削除方式の見直しを起票する（E2-5 §3.5）。[architecture.md](architecture.md)の日次確認に含めた。
@@ -95,13 +95,13 @@ DB権限（`nexus_public`で接続）:
 DB権限（`pg17-baseline.py run`の`delivery`部分）:
 
 - [x] `02`がスキーマを1回だけ作り所有をmigratorに渡す（再実行・role名未指定は拒否）。migratorは`CREATE SCHEMA`を拒否される（DBのCREATEなし）
-- [x] `03`が表の欠けた`delivery`、無効化したトリガーを拒否し、正しい形では冪等に再適用できる。権限の一覧が上の表と完全に一致し、所有者以外に`participant_bundles`のUPDATE/DELETE/TRUNCATE、`current_bundle`のDELETE/TRUNCATEを持つroleが無い
+- [x] `03`が表の欠けた`delivery`、無効化したトリガー（別のBEFORE UPDATEトリガーが有効でも）、同名で別の関数を呼ぶトリガーを拒否し、正しい形では冪等に再適用できる。権限の一覧が上の表と完全に一致し、所有者以外に`participant_bundles`のUPDATE/DELETE/TRUNCATE、`current_bundle`のDELETE/TRUNCATEを持つroleが無い
 - [x] `nexus_public`: 2表のSELECTだけ成功し、readiness述語にも引き続き合格。2表へのINSERT/UPDATE/DELETE/TRUNCATE、ポインタの後退、`delivery`へのCREATE、`studio`の読み取り、`SET ROLE`は拒否
 - [x] Studioの実行時role: `participant_bundles`のINSERT、`ON CONFLICT`による初回の行の作成とポインタの前進、UPDATEによる前進が成功。ポインタの後退（トリガー）、2行目（CHECK）、存在しない版（外部キー）、`participant_bundles`のUPDATE/DELETE/TRUNCATE、`current_bundle`のDELETE/TRUNCATE、DDL・トリガー無効化、`public`の読み取り、migratorへの`SET ROLE`は拒否
 - [x] 所有者でもポインタの後退はトリガーで拒否。権限の無いroleは2表を読めない
 - [x] `monitor-delivery-size.sql`が`nexus_public`で動き、閾値超過を`review_required`で示す
 
-2026-10-25の結果: [証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal.txt)（NexusMobile `63a3970`、PG17 digest `b0f9560a…`、97項目成功）。表とトリガーはE2-5 §3.1を写した検証専用のDDL（`sql/pg17-baseline/verification/delivery-reference-ddl.sql`）で作った。**Studioの実移行（NexusStudio#11）と#8の実role名で再確認するまで、本番に使う根拠にしない。**
+2026-10-25の結果: [初回の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal.txt)（NexusMobile `63a3970`、PG17 digest `b0f9560a…`、97項目成功）。PR #18のレビューを受けて`03`のトリガー照合を名前と関数に絞り、[再実行の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal-trigger-guard.txt)で98項目成功。表とトリガーはE2-5 §3.1を写した検証専用のDDL（`sql/pg17-baseline/verification/delivery-reference-ddl.sql`）で作った。**Studioの実移行（NexusStudio#11）と#8の実role名で再確認するまで、本番に使う根拠にしない。**
 
 edge（Caddy）経由（E2-5 O-4b、I4。#121を含むpublic-apiの採用digestとCaddy v2.11.4の採用digestで行う。未実施）:
 
@@ -126,7 +126,7 @@ export NEXUS_MOBILE_DIR=... PG17_BASELINE_MIGRATE_SQL=... PG17_BASELINE_PROJECT=
   PG17_BASELINE_SECRET_DIR=<新規の絶対パス>
 python3 scripts/pg17-baseline.py preflight
 python3 scripts/pg17-baseline.py manifest   # レビュー用manifest（commit・移行ID・SQLのsha256）
-python3 scripts/pg17-baseline.py run        # 構築と97項目の検証。volumeは自動削除しない
+python3 scripts/pg17-baseline.py run        # 構築と98項目の検証。volumeは自動削除しない
 ```
 
 `run`が確認すること: 空PG17.xの形が現行と一致／`sql/pg17-baseline/01-roles.sql`が1回だけ適用でき再実行は拒否／生成SQLが未知のtableを持つDBを拒否して行を保持／移行適用と冪等な再適用／`grant-runtime.sql`適用／履歴が2本と一致／`nexus`がreadinessに不合格で`nexus_public`が合格／上記3節の許可・拒否の全項目／誤パスワード拒否／3.1節の`delivery`（仮のStudio roleと検証専用DDLで、4.1節の全項目）。結果は`manifest`のSQL hashと合わせて記録する。

@@ -375,11 +375,26 @@ class Rehearsal:
         ddl = (base / "verification/delivery-reference-ddl.sql").read_text()
         self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=ddl)
         self.ok("reference DDL (E2-5 §3.1, stand-in for NexusStudio#11) created by the Studio migrator")
-        self.psql(STUDIO_MIGRATOR, "ALTER TABLE delivery.current_bundle DISABLE TRIGGER current_bundle_monotonic", password_env=p[STUDIO_MIGRATOR])
+        # An unrelated enabled BEFORE UPDATE trigger must not stand in for the monotonic one.
+        self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=(
+            "CREATE FUNCTION delivery.verification_touch() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;\n"
+            "CREATE TRIGGER verification_touch BEFORE UPDATE ON delivery.current_bundle FOR EACH ROW EXECUTE FUNCTION delivery.verification_touch();\n"
+            "ALTER TABLE delivery.current_bundle DISABLE TRIGGER current_bundle_monotonic;\n"))
         if self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names, check=False).returncode == 0:
-            fail("03-grant-delivery.sql must refuse current_bundle without an enabled monotonic trigger")
-        self.psql(STUDIO_MIGRATOR, "ALTER TABLE delivery.current_bundle ENABLE TRIGGER current_bundle_monotonic", password_env=p[STUDIO_MIGRATOR])
-        self.ok("03-grant-delivery.sql refuses current_bundle while the monotonic trigger is disabled")
+            fail("03-grant-delivery.sql must refuse current_bundle while the monotonic trigger is disabled")
+        self.ok("03-grant-delivery.sql refuses a disabled monotonic trigger even with another BEFORE UPDATE trigger enabled")
+        # A trigger with the reviewed name but another function must not pass either.
+        self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=(
+            "DROP TRIGGER current_bundle_monotonic ON delivery.current_bundle;\n"
+            "CREATE TRIGGER current_bundle_monotonic BEFORE UPDATE ON delivery.current_bundle FOR EACH ROW EXECUTE FUNCTION delivery.verification_touch();\n"))
+        if self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names, check=False).returncode == 0:
+            fail("03-grant-delivery.sql must refuse a current_bundle_monotonic trigger that runs another function")
+        self.ok("03-grant-delivery.sql refuses a current_bundle_monotonic trigger that runs another function")
+        self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=(
+            "DROP TRIGGER current_bundle_monotonic ON delivery.current_bundle;\n"
+            "DROP TRIGGER verification_touch ON delivery.current_bundle;\nDROP FUNCTION delivery.verification_touch();\n"
+            "CREATE TRIGGER current_bundle_monotonic BEFORE UPDATE ON delivery.current_bundle\n"
+            "    FOR EACH ROW EXECUTE FUNCTION delivery.reject_bundle_version_decrease();\n"))
         self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names)
         self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names)
         self.ok("03-grant-delivery.sql applied, then re-applied idempotently")

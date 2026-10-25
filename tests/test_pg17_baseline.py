@@ -118,6 +118,7 @@ assert sorted(grants) == sorted([
 ]), grants
 assert not re.search(r"DEFAULT PRIVILEGES|ON ALL TABLES[^;]*\bTO\b|\bstudio\.", grant_sql, re.IGNORECASE)
 assert "tgtype & 19 = 19" in grant_sql and "170000 AND 179999" in grant_sql
+assert "tgname = 'current_bundle_monotonic'" in grant_sql and "proname = 'reject_bundle_version_decrease'" in grant_sql
 
 for name in ("02-delivery-schema.sql", "03-grant-delivery.sql"):
     code = sql_code(name)
