@@ -70,5 +70,15 @@ I4（[pg17-baseline.md](pg17-baseline.md) 4.1節のedge確認）には`GET /api/
 - bundle 21・22のそれぞれで25項目すべて成功。接尾辞付きETag、`If-None-Match`での304、`Nexus-*`の保持、`Accept-Encoding`を変えたときの200、古いETagでの200、gzip展開後の本体とSHA-256の一致、圧縮なしでの本体・長さの一致を確かめた。**304が成立したので`HEAD /api/v2/bundle`は不要。**
 - `Content-Length`: E2-5 §4.1.1（ソースの読解）は「削除する」としていたが、実地では**圧縮後の本体が小さいときに圧縮後の大きさの`Content-Length`が付いた**（bundle 22でgzip 297・zstd 263、HTTP/2とHTTP/1.1の両方）。bundle 21では付かなかった（HTTP/1.1はchunked）。Caddyは上流の値を消し、Goのサーバーが、圧縮後の本体を書き終えた時点でバッファに収まっていれば自分で付けている、と推定される（原因はソースで未確認）。値は圧縮後の大きさと一致し、非圧縮の大きさ（`Nexus-Bundle-Length`）と取り違える値にはならない。iOSが`Content-Length`を使わない限り影響はない（E2-5 §6 規則8）。
 - zstdの本体は、手元のcurlがzstdを展開できないため、ヘッダーだけ確かめた（本体の照合はgzipと圧縮なしで行った）。
-- 境界: APIの実行UID 1654、secret 2つは1654所有の0400。Caddyはbackendに参加せず、edgeの参加者はCaddyとAPIだけ。hostの公開portは80/443だけで、再起動0回。停止はedge→DBの順に`-p`を明示し、`down -v`・pruneは使っていない。volumeは残してあり、確認後に個別に削除する。
+- 境界: APIの実行UID 1654、secret 2つは1654所有の0400。Caddyはbackendに参加せず、edgeの参加者はCaddyとAPIだけ。hostの公開portは80/443だけで、再起動0回。停止はedge→DBの順に`-p`を明示し、`down -v`・pruneは使っていない。volumeは、人間に名前を示して了承を得た後、同日18:16に1個ずつ削除した（下記）。
 - 手順の途中で、`validate-pg17-edge.py --resolved`が日本語を含むrepoのパスで誤って拒否した（macOSがパスをNFDで返し、ComposeがNFCで出力するため）。同じファイルかを`os.path.samefile`で比べるよう直した（テストを追加）。
+
+## 6. 後片付け（2026-10-25）
+
+[削除記録](evidence/issue-17/2026-10-25/volume-removal.txt)のとおり、Issue #17で作った隔離volume 3個を、使用コンテナが0であることを確かめてから`docker volume rm`で1個ずつ削除した。私有secretのディレクトリ3つも削除し、検証VM（colima `nexus-db-verify`）は停止状態へ戻した。prune・`down -v`は使っていない。
+
+- `nexus-pg17-baseline-i17-20261025-db`（初回の隔離検証、97項目）
+- `nexus-pg17-baseline-i17-20261025b-db`（トリガー照合の修正後の再実行、98項目）
+- `nexus-pg17-edge-iso-i17-i4-20261025-db`（I4）
+
+edge projectのCaddy用volume（`nexus-edge-pg17_caddy_*`、検証用の内部CAだけ）と、別作業（2026-09-25のPG17/PG18検証、Studio）のvolumeは対象外として残した。

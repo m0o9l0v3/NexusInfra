@@ -1,0 +1,15 @@
+# Issue #17 isolation volume removal, 2026-10-25 18:16 JST, context colima-nexus-db-verify (unix:///Users/m09/.colima/nexus-db-verify/docker.sock)
+# names were listed to the human, who asked to proceed; each had 0 containers using it
+$ docker volume rm nexus-pg17-baseline-i17-20261025-db
+nexus-pg17-baseline-i17-20261025-db
+$ docker volume rm nexus-pg17-baseline-i17-20261025b-db
+nexus-pg17-baseline-i17-20261025b-db
+$ docker volume rm nexus-pg17-edge-iso-i17-i4-20261025-db
+nexus-pg17-edge-iso-i17-i4-20261025-db
+# volumes containing i17 after removal: 0
+# kept (not in scope): nexus-edge-pg17_caddy_config nexus-edge-pg17_caddy_data nexus-pg17-restore-20260925 nexus-pg18-copy-restore-20260925_backup nexus-pg18-copy-restore-20260925_database nexus-pg18-rehearsal-backup-20260925 nexus-pg18-rehearsal-db-20260925 nexus-studio_nexus_studio_data 
+removed private secret dir ~/.nexus-verify-secrets/i17-20261025
+removed private secret dir ~/.nexus-verify-secrets/i17-20261025b
+removed private secret dir ~/.nexus-verify-secrets/i17-i4-20261025
+# remaining secret dirs: 0
+# prune / down -v not used
