@@ -66,7 +66,7 @@ Studioを第1段階の現行PG17で動かすための手順は、NexusStudioの[
 - **作るもの**: `nexus_studio_migrator`（LOGIN、非特権、`studio`の所有者、DBのCREATEなし）、`nexus_studio_app`（LOGIN、非特権、実行時。Studio APIは本番でこの名前を強制）、両者へのDB `nexus`のCONNECT、空の`studio`（`PUBLIC`から剥奪、appにUSAGE）。`public`・`nexus_public`の権限は変えず、`nexus_public`は`studio`を使えない
 - **実行時の権限**: NexusStudio `deploy/database/grant-studio-runtime.sql`（`studio`の表だけ。移行履歴は除外、ID予約表はSELECT・INSERTのみ）。`delivery`は本書の`03`
 - **認証**（Studio側の決定、30 S1〜S6）: 個別管理者のIdentity、HttpOnly・SameSite=Strict・SecureのCookie（8時間・スライド）、CSRFトークン、5回失敗で15分ロック、無効化の即時反映、公開サインアップなし、初期管理者は運用者が`admin add`。DataProtectionの鍵は専用の私有volume（`DataProtection__KeysDirectory`）に永続化する。本番で最初に有効化する機能はStep 0〜4の全機能、参加者向け配信はNexusStudio#11と#17が揃ってから
-- **隔離検証**: NexusStudio CI `studio-db-role-pg17-check`が、本書の採用PG17 digest（17.11）を現行と同じ形で起動し、baseline相当の後にrole作成・Studioの全移行・runtime権限の許可/拒否・`nexus_public`から`studio`が読めないことを確かめる。2026-11-01にMacの隔離環境でも成功（NexusStudio `docs/検証記録/2026-11-01_Infra8_PG17のDBロール.md`）。**本番未適用。** `delivery`の表を作るStudioの実移行（NexusStudio#11）の追加後に、`pg17-baseline.py`の仮のStudio role・検証専用DDLを実手順に置き換えて再確認する
+- **隔離検証**: NexusStudio CI `studio-db-role-pg17-check`が、本書の採用PG17 digest（17.11）を現行と同じ形で起動し、baseline相当の後にrole作成・Studioの全移行・runtime権限の許可/拒否・`nexus_public`から`studio`が読めないことを確かめる。2026-11-01にMacの隔離環境でも成功（NexusStudio `docs/検証記録/2026-11-01_Infra8_PG17のDBロール.md`）。同日、`pg17-baseline.py`の仮のStudio role・検証専用DDLをStudioの実手順（`setup-studio-roles.sql`→`02`→Studioの全移行→`grant-studio-runtime.sql`→`03`）に置き換え、実baseline（01〜03）との結合で再確認した（4節）。**本番未適用。**
 
 ## 4. Issue #7 の受け入れ条件（正式、契約B）
 
@@ -111,7 +111,9 @@ DB権限（`pg17-baseline.py run`の`delivery`部分）:
 - [x] 所有者でもポインタの後退はトリガーで拒否。権限の無いroleは2表を読めない
 - [x] `monitor-delivery-size.sql`が`nexus_public`で動き、閾値超過を`review_required`で示す
 
-2026-10-25の結果: [初回の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal.txt)（NexusMobile `63a3970`、PG17 digest `b0f9560a…`、97項目成功）。PR #18のレビューを受けて`03`のトリガー照合を名前と関数に絞り、[再実行の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal-trigger-guard.txt)で98項目成功。表とトリガーはE2-5 §3.1を写した検証専用のDDL（`sql/pg17-baseline/verification/delivery-reference-ddl.sql`）で作った。**Studioの実移行（NexusStudio#11）と#8の実role名で再確認するまで、本番に使う根拠にしない。**
+2026-10-25の結果: [初回の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal.txt)（NexusMobile `63a3970`、PG17 digest `b0f9560a…`、97項目成功）。PR #18のレビューを受けて`03`のトリガー照合を名前と関数に絞り、[再実行の証跡](evidence/issue-17/2026-10-25/pg17-delivery-rehearsal-trigger-guard.txt)で98項目成功。表とトリガーはE2-5 §3.1を写した検証専用のDDL（`sql/pg17-baseline/verification/delivery-reference-ddl.sql`。2026-11-01に削除）で作った。
+
+2026-11-01の再確認（Issue #8）: [証跡](evidence/issue-8/2026-11-01/pg17-studio-rehearsal.txt)（NexusMobile `6f1b079`（移行SQLは前回と同じ`7cf58c30…`）、NexusStudio `ae1db44`、同じPG17 digest、104項目成功）。Studioのroleと`studio`はStudioの`setup-studio-roles.sql`で作った（別の`system_identifier`では何も作らずに失敗し、2回目も拒否）。`delivery`の表とトリガーはStudioの実移行13件で作った（`nexus_studio_migrator`で適用し、冪等に再適用。`AddParticipantBundles`と、版を戻す更新を23514で拒否し`search_path`を固定する`HardenBundleMonotonicTrigger`を含む）。その後`grant-studio-runtime.sql`、`03`の順に適用した。上の受け入れ条件はすべてこの構成でも成立した。加えて、Studioの実行時roleが`studio.releases`を読め、ID予約表の更新と移行履歴への書き込みが拒否され、`nexus_public`が`studio`を読めないことを確かめた。**隔離環境での成功であり、本番適用には6節のレビューと別承認が要る。**
 
 edge（Caddy）経由（E2-5 O-4b、I4）。2026-10-25に隔離環境で実施した（API `sha256:9fa4f1fe…`（source `63a3970`）、Caddy v2.11.4 `sha256:040e9f74…`、[記録](pg17-issue-17-i4-publication.md) 5節）。gzip・zstdのそれぞれで、35,946バイトと2,016バイトのダミーbundleを使って確かめた:
 
@@ -131,15 +133,17 @@ edge（Caddy）経由（E2-5 O-4b、I4）。2026-10-25に隔離環境で実施�
 # 1) Mobileの生成SQL（DB接続なし）。.NET 8 SDKが必要。
 dotnet run --project tools/database/Nexus.Database.csproj -- script "$PG17_BASELINE_MIGRATE_SQL"
 # 2) 隔離環境（Mac等）のみ。値は私有設定から読み込む。
-export NEXUS_MOBILE_DIR=... PG17_BASELINE_MIGRATE_SQL=... PG17_BASELINE_PROJECT=nexus-pg17-baseline-<suffix> \
+#    Studioの生成SQL（DB接続なし）。NexusStudioで、接続しない仮の値をSTUDIO_MIGRATION_CONNECTIONに入れて:
+#    dotnet tool run dotnet-ef migrations script --idempotent --project apps/studio-api/StudioApi.csproj --startup-project apps/studio-api/StudioApi.csproj --output "$PG17_BASELINE_STUDIO_MIGRATE_SQL"
+export NEXUS_MOBILE_DIR=... PG17_BASELINE_MIGRATE_SQL=... NEXUS_STUDIO_DIR=... PG17_BASELINE_STUDIO_MIGRATE_SQL=... PG17_BASELINE_PROJECT=nexus-pg17-baseline-<suffix> \
   PG17_BASELINE_VOLUME=nexus-pg17-baseline-<suffix>-db PG17_BASELINE_IMAGE=postgres@sha256:<digest> \
   PG17_BASELINE_SECRET_DIR=<新規の絶対パス>
 python3 scripts/pg17-baseline.py preflight
-python3 scripts/pg17-baseline.py manifest   # レビュー用manifest（commit・移行ID・SQLのsha256）
-python3 scripts/pg17-baseline.py run        # 構築と98項目の検証。volumeは自動削除しない
+python3 scripts/pg17-baseline.py manifest   # レビュー用manifest（両repoのcommit・移行ID・SQLのsha256）
+python3 scripts/pg17-baseline.py run        # 構築と104項目の検証。volumeは自動削除しない
 ```
 
-`run`が確認すること: 空PG17.xの形が現行と一致／`sql/pg17-baseline/01-roles.sql`が1回だけ適用でき再実行は拒否／生成SQLが未知のtableを持つDBを拒否して行を保持／移行適用と冪等な再適用／`grant-runtime.sql`適用／履歴が2本と一致／`nexus`がreadinessに不合格で`nexus_public`が合格／上記3節の許可・拒否の全項目／誤パスワード拒否／3.1節の`delivery`（仮のStudio roleと検証専用DDLで、4.1節の全項目）。結果は`manifest`のSQL hashと合わせて記録する。
+`run`が確認すること: 空PG17.xの形が現行と一致／`sql/pg17-baseline/01-roles.sql`が1回だけ適用でき再実行は拒否／生成SQLが未知のtableを持つDBを拒否して行を保持／移行適用と冪等な再適用／`grant-runtime.sql`適用／履歴が2本と一致／`nexus`がreadinessに不合格で`nexus_public`が合格／上記3節の許可・拒否の全項目／誤パスワード拒否／3.2節のStudioの実手順（role作成、Studioの全移行の適用と再適用、`grant-studio-runtime.sql`）と3.1節の`delivery`（4節の全項目）。`manifest`はStudioの生成SQLについても、移行IDがソースから見える移行と一致すること、配信の2移行を含むこと、ROLE・GRANT・REVOKE・`public.`・`studio`/`delivery`以外への表作成を含まないこと、Studio APIが起動時に移行しないことを確かめる。結果は`manifest`のSQL hashと合わせて記録する。
 
 colima等のVMでは、secretの置き場所（`PG17_BASELINE_SECRET_DIR`）をVMが共有するディレクトリ（既定はホームの下）にする。`/tmp`等は共有されずコンテナ起動に失敗する。
 

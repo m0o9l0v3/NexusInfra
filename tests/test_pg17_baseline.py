@@ -81,6 +81,36 @@ with tempfile.TemporaryDirectory() as tmp:
     program.write_text("app.Run();\n")
     assert baseline.check_public_api_startup(mobile)
 
+# --- Studio migration SQL review (Infra #8, NexusStudio#11)
+STUDIO_IDS = ["20260922142853_InitialCreate", *baseline.STUDIO_DELIVERY_MIGRATIONS]
+
+
+def studio_sql(ids=STUDIO_IDS, extra=""):
+    parts = ['CREATE TABLE IF NOT EXISTS studio."__EFMigrationsHistory" ("MigrationId" text);',
+             "CREATE TABLE studio.releases (id uuid);", "CREATE TABLE delivery.participant_bundles (bundle_version bigint);",
+             'CREATE INDEX "IX_x" ON delivery.current_bundle (bundle_version);']
+    for migration in ids:
+        parts.append(f'INSERT INTO studio."__EFMigrationsHistory" ("MigrationId", "ProductVersion")\n    VALUES (\'{migration}\', \'10.0.12\');')
+    return "\n".join(parts) + extra
+
+
+assert baseline.check_studio_migration_sql(studio_sql(), STUDIO_IDS) == []
+assert baseline.check_studio_migration_sql(studio_sql(), STUDIO_IDS[:-1] + ["20261201000000_Extra"])
+assert baseline.check_studio_migration_sql(studio_sql(STUDIO_IDS[:1]), STUDIO_IDS[:1])
+for bad in ("CREATE ROLE x;", "GRANT SELECT ON studio.releases TO nexus_public;", "SET ROLE nexus;", "DROP SCHEMA delivery CASCADE;",
+            "TRUNCATE delivery.participant_bundles;", "CREATE TABLE spots (id int);", "CREATE TABLE public.spots (id int);",
+            'CREATE UNIQUE INDEX "IX_y" ON spots (id);'):
+    assert baseline.check_studio_migration_sql(studio_sql(extra="\n" + bad), STUDIO_IDS), bad
+with tempfile.TemporaryDirectory() as tmp:
+    studio = Path(tmp)
+    (studio / "apps/studio-api/Migrations").mkdir(parents=True)
+    program = studio / "apps/studio-api/Program.cs"
+    program.write_text("app.Run();\n")
+    (studio / "apps/studio-api/Migrations/X.cs").write_text("migrationBuilder.Sql(\"x\"); // Migrate(\n")
+    assert baseline.check_studio_startup(studio) == []
+    program.write_text("await db.Database.MigrateAsync();\napp.Run();\n")
+    assert baseline.check_studio_startup(studio)
+
 # --- role bootstrap SQL
 roles = (ROOT / "sql/pg17-baseline/01-roles.sql").read_text()
 code = "\n".join(line for line in roles.splitlines() if not line.lstrip().startswith("--"))
@@ -128,9 +158,7 @@ monitor_sql = sql_code("monitor-delivery-size.sql")
 assert "BEGIN READ ONLY;" in monitor_sql and "\\set max_bytes 1073741824" in monitor_sql and "\\set max_rows 500" in monitor_sql
 assert not re.search(r"\b(INSERT|UPDATE|DELETE|TRUNCATE|GRANT|CREATE)\b", monitor_sql)
 
-reference = (ROOT / "sql/pg17-baseline/verification/delivery-reference-ddl.sql").read_text()
-assert "VERIFICATION ONLY" in reference and "BEFORE UPDATE ON delivery.current_bundle" in reference
-assert "payload         bytea" in reference and "CHECK (singleton)" in reference
+assert "verification/delivery-reference-ddl.sql" not in baseline.DELIVERY_SQL
 assert set(baseline.DELIVERY_GRANTS["nexus_public"]) == set(baseline.DELIVERY_TABLES)
 assert all(privs == {"SELECT"} for privs in baseline.DELIVERY_GRANTS["nexus_public"].values())
 

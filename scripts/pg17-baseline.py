@@ -2,8 +2,8 @@
 
 Never touches the live database. Subcommands:
   preflight  static checks of the isolation settings (no Docker access)
-  manifest   verify a NexusMobile checkout + generated migration SQL and print a review manifest
-  run        build a disposable PG17 from an empty volume, apply roles/migration/grants, verify
+  manifest   verify the NexusMobile and NexusStudio checkouts + their generated migration SQL and print a review manifest
+  run        build a disposable PG17 from an empty volume, apply roles/migrations/grants of both apps, verify
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ READINESS_SQL = ("SELECT r.rolsuper OR r.rolcreatedb OR r.rolcreaterole OR r.rol
                  "OR pg_has_role(current_user, 'nexus_owner', 'MEMBER') "
                  "OR has_schema_privilege(current_user, 'public', 'CREATE') "
                  "FROM pg_roles r WHERE r.rolname = current_user")
-# Stand-ins for the Studio roles until Infra #8 fixes the real names (NexusStudio deploy/database).
+# Studio role names fixed by Infra #8 (NexusStudio deploy/database/pg17/setup-studio-roles.sql).
 STUDIO_MIGRATOR = "nexus_studio_migrator"
 STUDIO_APP = "nexus_studio_app"
 DELIVERY_TABLES = ["current_bundle", "participant_bundles"]
@@ -126,8 +126,60 @@ def check_public_api_startup(mobile: Path) -> list:
     return errors
 
 
-DELIVERY_SQL = ["02-delivery-schema.sql", "03-grant-delivery.sql", "monitor-delivery-size.sql",
-                "verification/delivery-reference-ddl.sql"]
+DELIVERY_SQL = ["02-delivery-schema.sql", "03-grant-delivery.sql", "monitor-delivery-size.sql"]
+# Studio (Infra #8, NexusStudio#11): files applied in the order of NexusStudio deploy/database/pg17/README.md §2.
+STUDIO_FILES = {"studio_roles_sql": "deploy/database/pg17/setup-studio-roles.sql",
+                "studio_grant_runtime_sql": "deploy/database/grant-studio-runtime.sql"}
+STUDIO_DELIVERY_MIGRATIONS = ["20261101115645_AddParticipantBundles", "20261101124450_HardenBundleMonotonicTrigger"]
+
+
+def studio_migration_ids_in_source(studio: Path) -> list:
+    found = []
+    for path in sorted((studio / "apps/studio-api/Migrations").glob("*.cs")):
+        text = path.read_text(encoding="utf-8-sig")
+        match = re.search(r'\[Migration\("([^"]+)"\)\]', text)
+        if match and "[DbContext(" in text:
+            found.append(match.group(1))
+    return found
+
+
+def check_studio_migration_sql(sql: str, discoverable: list) -> list:
+    errors = []
+    ids = re.findall(r'INSERT INTO studio\."__EFMigrationsHistory" \("MigrationId", "ProductVersion"\)\s+VALUES \(\'([^\']+)\'', sql)
+    if ids != discoverable:
+        errors.append(f"Studio SQL migrations differ from the discoverable chain: {ids}")
+    missing = [m for m in STUDIO_DELIVERY_MIGRATIONS if m not in ids]
+    if missing:
+        errors.append(f"Studio SQL lacks the delivery migrations: {missing}")
+    for pattern in (r"\bCREATE\s+ROLE\b", r"\bALTER\s+ROLE\b", r"\bSET\s+ROLE\b", r"\bDROP\s+(SCHEMA|DATABASE|ROLE)\b",
+                    r"\bTRUNCATE\b", r"\bGRANT\b", r"\bREVOKE\b", r"\bCOPY\b", r"\bpublic\."):
+        if re.search(pattern, sql, re.IGNORECASE):
+            errors.append(f"Studio SQL contains a forbidden statement: {pattern}")
+    for target in re.findall(r"CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX)\b[^(;]*", sql, re.IGNORECASE):
+        if not re.search(r"\b(studio|delivery)\.", target):
+            errors.append(f"Studio SQL creates an object outside studio/delivery: {target.strip()}")
+    return errors
+
+
+def check_studio_startup(studio: Path) -> list:
+    pattern = re.compile(r"\bMigrate(Async)?\s*\(|EnsureCreated|\.SeedAsync")
+    return [f"Studio API source runs migration or seeding: {path.relative_to(studio)}"
+            for path in sorted((studio / "apps/studio-api").rglob("*.cs"))
+            if not {"obj", "bin", "Migrations"} & set(path.relative_to(studio).parts) and pattern.search(path.read_text(encoding="utf-8-sig"))]
+
+
+def studio_manifest(studio: Path, studio_sql: Path) -> dict:
+    files = {name: studio / rel for name, rel in STUDIO_FILES.items()}
+    for path in (studio_sql, *files.values()):
+        if not path.is_file():
+            fail(f"Missing review input: {path}")
+    discoverable = studio_migration_ids_in_source(studio)
+    errors = check_studio_migration_sql(studio_sql.read_text(encoding="utf-8-sig"), discoverable) + check_studio_startup(studio)
+    if errors:
+        fail("\n".join(errors))
+    commit = subprocess.run(["git", "-C", str(studio), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    return {"nexus_studio_commit": commit, "studio_migrations": discoverable,
+            "files": {"studio_migrate_sql": sha256(studio_sql), **{name: sha256(path) for name, path in files.items()}}}
 
 
 def manifest(mobile: Path, migrate_sql: Path) -> dict:
@@ -165,8 +217,9 @@ def manifest(mobile: Path, migrate_sql: Path) -> dict:
 
 
 class Rehearsal:
-    def __init__(self, cfg: dict, mobile: Path, migrate_sql: Path):
+    def __init__(self, cfg: dict, mobile: Path, migrate_sql: Path, studio: Path, studio_sql: Path, studio_migrations: list):
         self.cfg, self.mobile, self.migrate_sql = cfg, mobile, migrate_sql
+        self.studio, self.studio_sql, self.studio_migrations = studio, studio_sql, studio_migrations
         self.docker = shlex.split(os.environ.get("DOCKER", "docker"))
         probe = subprocess.run(self.docker + ["compose", "version"], capture_output=True)
         self.compose = self.docker + ["compose"] if probe.returncode == 0 else ["docker-compose"]
@@ -336,22 +389,37 @@ class Rehearsal:
         if count != "2":
             fail("Migration replay changed the history")
 
+    def superuser_file(self, path: Path, *, env=None, variables=None, check=True):
+        """Apply a reviewed SQL file as the cluster superuser, passing secrets only through the environment."""
+        cmd = self.compose + ["exec", "-T"]
+        for key in env or {}:
+            cmd += ["-e", key]
+        cmd += ["postgres", "psql", "-h", "localhost", "-U", "nexus", "-d", "nexus", "-X", "-v", "ON_ERROR_STOP=1"]
+        for key, value in (variables or {}).items():
+            cmd += ["-v", f"{key}={value}"]
+        return self.run(cmd, stdin=path.read_text(encoding="utf-8-sig"), extra_env=env, check=check)
+
     def verify_delivery(self):
-        """Contract B revision (Infra #17, E2-5 §3.2): delivery schema owned by the Studio migrator."""
+        """Contract B revision (Infra #17, E2-5 §3.2) with the real Studio procedure (Infra #8, NexusStudio#11)."""
         for role in (STUDIO_MIGRATOR, STUDIO_APP, "nexus_verify_other"):
             self.passwords[role] = secrets.token_hex(24)
         p = self.passwords
-        # Stand-in for the Studio setup of Infra #8: two LOGIN roles, schema studio owned by the migrator.
+        studio_env = {"NEXUS_STUDIO_MIGRATOR_PASSWORD": p[STUDIO_MIGRATOR], "NEXUS_STUDIO_APP_PASSWORD": p[STUDIO_APP]}
+        roles_sql = self.studio / STUDIO_FILES["studio_roles_sql"]
+        system_id = self.psql("nexus", "SELECT system_identifier FROM pg_control_system()", host="localhost").stdout.strip()
+        studio_objects = ("SELECT count(*) FROM pg_roles WHERE rolname LIKE 'nexus\\_studio\\_%' "
+                          "UNION ALL SELECT count(*) FROM pg_namespace WHERE nspname IN ('studio', 'delivery')")
+        wrong = self.superuser_file(roles_sql, env=studio_env, variables={"expected_system_id": "1"}, check=False)
+        if wrong.returncode == 0 or self.psql("nexus", studio_objects, host="localhost").stdout.split() != ["0", "0"]:
+            fail("setup-studio-roles.sql must refuse another cluster identifier without creating anything")
+        self.ok("Studio setup-studio-roles.sql refuses another cluster identifier, nothing created")
+        self.superuser_file(roles_sql, env=studio_env, variables={"expected_system_id": system_id})
+        if self.superuser_file(roles_sql, env=studio_env, variables={"expected_system_id": system_id}, check=False).returncode == 0:
+            fail("setup-studio-roles.sql must not be re-runnable")
+        self.ok("Studio setup-studio-roles.sql applied once (real roles, empty studio schema); a second run is rejected")
         self.psql("nexus", "", host="localhost", input_sql=(
-            f"CREATE ROLE {STUDIO_MIGRATOR} LOGIN PASSWORD '{p[STUDIO_MIGRATOR]}';\n"
-            f"CREATE ROLE {STUDIO_APP} LOGIN PASSWORD '{p[STUDIO_APP]}';\n"
             f"CREATE ROLE nexus_verify_other LOGIN PASSWORD '{p['nexus_verify_other']}';\n"
-            f"GRANT CONNECT ON DATABASE nexus TO {STUDIO_MIGRATOR}, {STUDIO_APP}, nexus_verify_other;\n"
-            f"CREATE SCHEMA studio AUTHORIZATION {STUDIO_MIGRATOR};\nREVOKE ALL ON SCHEMA studio FROM PUBLIC;\n"
-            f"GRANT USAGE ON SCHEMA studio TO {STUDIO_APP};\n"
-            f"SET ROLE {STUDIO_MIGRATOR};\nCREATE TABLE studio.releases (sequence bigint PRIMARY KEY, release_id uuid NOT NULL);\n"
-            f"RESET ROLE;\nGRANT SELECT, INSERT ON studio.releases TO {STUDIO_APP};\n"))
-        self.ok("stand-in Studio roles and studio schema created (real names come from Infra #8)")
+            "GRANT CONNECT ON DATABASE nexus TO nexus_verify_other;\n"))
         self.denied("Studio migrator CREATE SCHEMA (no CREATE on the database)", "CREATE SCHEMA forbidden", role=STUDIO_MIGRATOR)
 
         names = {"studio_migrator": STUDIO_MIGRATOR, "studio_app": STUDIO_APP}
@@ -372,9 +440,21 @@ class Rehearsal:
         if self.psql("nexus", "", host="localhost", input_sql=grant_sql, variables=names, check=False).returncode == 0:
             fail("03-grant-delivery.sql must refuse a delivery schema without the reviewed tables")
         self.ok("03-grant-delivery.sql refuses a delivery schema without the reviewed tables")
-        ddl = (base / "verification/delivery-reference-ddl.sql").read_text()
-        self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=ddl)
-        self.ok("reference DDL (E2-5 §3.1, stand-in for NexusStudio#11) created by the Studio migrator")
+
+        studio_sql = self.studio_sql.read_text(encoding="utf-8-sig")
+        self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=studio_sql)
+        self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=studio_sql)
+        history = self.psql(STUDIO_MIGRATOR, 'SELECT "MigrationId" FROM studio."__EFMigrationsHistory" ORDER BY 1',
+                            password_env=p[STUDIO_MIGRATOR]).stdout.split()
+        if history != self.studio_migrations:
+            fail(f"Studio history differs from the reviewed migrations: {history}")
+        tables = self.psql("nexus", "SELECT string_agg(tablename || ':' || tableowner, ',' ORDER BY tablename) FROM pg_tables WHERE schemaname = 'delivery'",
+                           host="localhost").stdout.strip()
+        if tables != f"current_bundle:{STUDIO_MIGRATOR},participant_bundles:{STUDIO_MIGRATOR}":
+            fail(f"delivery must hold exactly the two contract tables owned by the Studio migrator, got {tables}")
+        self.ok(f"reviewed Studio migration SQL ({len(history)} migrations) applied by the Studio migrator, then replayed idempotently")
+        self.superuser_file(self.studio / STUDIO_FILES["studio_grant_runtime_sql"])
+        self.ok("Studio grant-studio-runtime.sql applied")
         # An unrelated enabled BEFORE UPDATE trigger must not stand in for the monotonic one.
         self.psql(STUDIO_MIGRATOR, "", password_env=p[STUDIO_MIGRATOR], input_sql=(
             "CREATE FUNCTION delivery.verification_touch() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$;\n"
@@ -474,6 +554,11 @@ class Rehearsal:
             self.denied("nexus_public: " + name, sql)
         for table in DELIVERY_TABLES:
             self.denied(f"other role: SELECT delivery.{table}", f"SELECT * FROM delivery.{table}", role="nexus_verify_other")
+        self.allowed("Studio runtime: SELECT studio.releases", "SELECT count(*) FROM studio.releases", **app)
+        self.denied("Studio runtime: UPDATE studio.id_reservations (append-only ledger)", "UPDATE studio.id_reservations SET state = 'retired'", role=STUDIO_APP)
+        self.denied("Studio runtime: INSERT studio.__EFMigrationsHistory",
+                    'INSERT INTO studio."__EFMigrationsHistory" VALUES (\'x\', \'x\')', role=STUDIO_APP)
+        self.denied("nexus_public: SELECT studio.id_reservations", "SELECT * FROM studio.id_reservations")
 
         monitor = (base / "monitor-delivery-size.sql").read_text()
         for variables, want in (({}, "f"), ({"max_rows": "2"}, "t"), ({"max_bytes": "1"}, "t")):
@@ -502,10 +587,18 @@ def main(argv: list) -> None:
         migrate_sql = Path(os.environ.get("PG17_BASELINE_MIGRATE_SQL", ""))
         if not mobile.is_dir() or not migrate_sql.is_file():
             fail("Set NEXUS_MOBILE_DIR (NexusMobile checkout) and PG17_BASELINE_MIGRATE_SQL (output of tools/database script)")
+        studio = Path(os.environ.get("NEXUS_STUDIO_DIR", ""))
+        studio_sql = Path(os.environ.get("PG17_BASELINE_STUDIO_MIGRATE_SQL", ""))
+        if not studio.is_dir() or not studio_sql.is_file():
+            fail("Set NEXUS_STUDIO_DIR (NexusStudio checkout) and PG17_BASELINE_STUDIO_MIGRATE_SQL (dotnet-ef migrations script --idempotent)")
         review = manifest(mobile, migrate_sql)
+        studio_review = studio_manifest(studio, studio_sql)
+        review["nexus_studio_commit"] = studio_review["nexus_studio_commit"]
+        review["studio_migrations"] = studio_review["studio_migrations"]
+        review["files"].update(studio_review["files"])
         print(json.dumps(review, indent=2, ensure_ascii=False))
         if mode == "run":
-            rehearsal = Rehearsal(check_settings(os.environ), mobile, migrate_sql)
+            rehearsal = Rehearsal(check_settings(os.environ), mobile, migrate_sql, studio, studio_sql, studio_review["studio_migrations"])
             try:
                 rehearsal.setup()
                 rehearsal.apply()
