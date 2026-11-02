@@ -151,6 +151,8 @@ colima等のVMでは、secretの置き場所（`PG17_BASELINE_SECRET_DIR`）をV
 
 ## 6. 本番適用前に人間が承認するSQL・操作（承認があるまで実行しない）
 
+1〜5を1本の順序表（実行者・入力のSHA-256・影響・実測したロック・止める条件・失敗時）と運用者の手順、承認の単位（A バックアップ／B baseline／C Studio）にまとめたものは[pg17-issue-8-production-apply.md](pg17-issue-8-production-apply.md)（2026-11-02、レビュー用・本番未適用）。
+
 1. `sql/pg17-baseline/01-roles.sql`（初期化済みクラスタ用に`init-roles.sh`を改変）: `nexus_owner`/`nexus_admin_app`（NOLOGIN）/`nexus_public`（LOGIN、パスワードは環境変数経由）を作成、**DBの所有者を`nexus`から`nexus_owner`へ変更**、`PUBLIC`のDB権限・`public` schema権限を剥奪、`nexus_public`へCONNECT/USAGE。承認論点: DB所有者変更、`PUBLIC`のCONNECT剥奪（現行は`nexus`のみのため影響なしと確認する）、`nexus_migrator`を作らない代わりにsuperuser接続で移行する点、`nexus_admin_app`をNOLOGINで作る点。
 2. `tools/database script`の生成SQL（`manifest`のsha256で固定）。直接`dotnet ef database update`はしない。対象DBは`nexus`、実行者は`SET ROLE nexus_owner`、影響は2表群の新規作成と履歴2行のみ（既存user tableが0件であることを実行直前に再確認）。
 3. `deploy/database/grant-runtime.sql`（`SET ROLE nexus_owner`で実行）。

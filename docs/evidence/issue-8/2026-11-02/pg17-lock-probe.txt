@@ -1,0 +1,117 @@
+# Issue #8 lock probe and operator-command check, 2026-11-02. Disposable only; production untouched.
+# Image postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (17.11), tmpfs data (no volume), --rm.
+# Inputs: the nine files of docs/pg17-issue-8-production-apply.md §1.2 (SHA256SUMS all OK).
+# manifest header: Not covered by manifest: NexusStudio deploy/database/pg17/setup-studio-roles.sh 951f09c85e58df6d8e013451044b6ef8b747c1041ea618b275799fb39afbf62f
+
+## 1. Locks held by the applying session (pg17-lock-probe.sh; catalog AccessShare filtered; relations grouped by schema)
+# single-transaction steps: last COMMIT replaced by the lock list + ROLLBACK, then applied for real.
+# multi-transaction steps (B2 mobile-migrate, C3 studio-migrate): lock list before every COMMIT.
+# steps with no row below held no heavyweight lock besides catalog AccessShare: 02-delivery (C2), grant-studio (C4), 03-grant (C5).
+01-roles | object | pg_authid#<oid> | ShareUpdateExclusiveLock
+01-roles | relation | pg_catalog.* | RowExclusiveLock
+grant-runtime | relation | public.events | AccessExclusiveLock
+grant-runtime | relation | public.spots | AccessExclusiveLock
+mobile-migrate | advisory | advisory | ExclusiveLock
+mobile-migrate | relation | pg_toast.* | AccessExclusiveLock
+mobile-migrate | relation | pg_toast.* | ShareLock
+mobile-migrate | relation | public.* | AccessExclusiveLock
+mobile-migrate | relation | public.* | AccessShareLock
+mobile-migrate | relation | public.* | RowExclusiveLock
+mobile-migrate | relation | public.* | ShareLock
+mobile-migrate | relation | public.* | ShareRowExclusiveLock
+studio-migrate | object | pg_constraint#<oid> | AccessExclusiveLock
+studio-migrate | relation | (dropped-in-tx relation) | AccessExclusiveLock
+studio-migrate | relation | delivery.* | AccessExclusiveLock
+studio-migrate | relation | delivery.* | AccessShareLock
+studio-migrate | relation | delivery.* | ShareLock
+studio-migrate | relation | delivery.* | ShareRowExclusiveLock
+studio-migrate | relation | pg_toast.* | AccessExclusiveLock
+studio-migrate | relation | pg_toast.* | ShareLock
+studio-migrate | relation | studio.* | AccessExclusiveLock
+studio-migrate | relation | studio.* | AccessShareLock
+studio-migrate | relation | studio.* | RowExclusiveLock
+studio-migrate | relation | studio.* | RowShareLock
+studio-migrate | relation | studio.* | ShareLock
+studio-migrate | relation | studio.* | ShareRowExclusiveLock
+studio-roles | object | pg_authid#<oid> | ShareUpdateExclusiveLock
+studio-roles | relation | pg_catalog.* | RowExclusiveLock
+# C3 '(dropped-in-tx relation)' = studio.ix_operation_logs_started_at (DROP INDEX in the same SQL); pg_constraint objects are studio CHECK constraints replaced by the SQL.
+
+## 2. Concurrency and other checks (pg17-lock-probe.sh)
+VERSION|17.11
+READER|8
+REPLAY|ok
+READER_STILL|1
+BOM|accepted
+AFTER_ROLLBACK|0|0|14
+# READER|8 = a nexus_public session holds AccessShareLock on spots/events/visit_logs (+ indexes) in an open transaction during C1-C5, every step with lock_timeout=5s;
+# READER_STILL|1 = that session still active after C5; REPLAY = C3 applied twice; BOM = CI artifact with its BOM accepted by psql as a replay;
+# AFTER_ROLLBACK = NexusStudio README §4 removal SQL leaves 0 Studio roles, 0 studio/delivery schemas, 14 public tables.
+
+## 3. Operator commands of §5.2-5.4 run verbatim (pg17-operator-commands-check.sh; system_identifier masked)
+01-roles.sql: OK
+mobile-migrate.sql: OK
+grant-runtime.sql: OK
+studio-pg17/setup-studio-roles.sh: OK
+studio-pg17/setup-studio-roles.sql: OK
+02-delivery-schema.sql: OK
+studio-migrate.sql: OK
+grant-studio-runtime.sql: OK
+03-grant-delivery.sql: OK
+== P2
+nexus|nexus|170011|scram-sha-256|<sysid>
+== P3
+roles|nexus
+schemas|public
+user_tables|0
+databases|nexus,postgres
+nexus_owner|nexus
+extensions|plpgsql
+== P5
+local   all             all                                     trust
+host    all             all             127.0.0.1/32            trust
+host    all             all             ::1/128                 trust
+local   replication     all                                     trust
+host    replication     all             127.0.0.1/32            trust
+host    replication     all             ::1/128                 trust
+host all all all scram-sha-256
+== B1 empty password (expect exit 0, nothing created)
+BEGIN
+DO
+NEXUS_PUBLIC_PASSWORD is empty
+exit=0
+after_empty|0
+== B1
+== B2
+== B3
+== B4
+roles|nexus,nexus_admin_app,nexus_owner,nexus_public
+db_owner|nexus_owner
+public_acl_on_db|0
+history|20260905120000_AddMapDatasets,20260919120000_AddInitialPostgreSqlSchema
+public_tables|14
+SET
+readiness_unfit|f
+RESET
+== C1 wrong system id (expect refusal)
+PostgreSQL target does not match the approved 17.x cluster and database
+refused exit=2
+== C1
+exit=0
+== C2
+== C3
+== C4
+== C5
+== C6
+studio_roles|nexus_studio_app:false,nexus_studio_migrator:false
+schemas|delivery:nexus_studio_migrator,studio:nexus_studio_migrator
+studio_history|14|20261101135153_AddRenameRevisionSource
+delivery_tables|current_bundle:nexus_studio_migrator,participant_bundles:nexus_studio_migrator
+public_cannot_use_studio|t
+app_cannot_write_history|t
+migrator_no_db_create|t
+public_tables_unchanged|14
+delivery_rows|0
+== 5.5 history query
+      14
+DONE

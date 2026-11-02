@@ -1,0 +1,37 @@
+{
+  "nexus_mobile_commit": "6f1b07955b59a8122f45e0ade6b76b88bedf3769",
+  "migrations": [
+    "20260905120000_AddMapDatasets",
+    "20260919120000_AddInitialPostgreSqlSchema"
+  ],
+  "files": {
+    "roles_sql": "0ec65dce204f27fd01db974cc9508f2e36594cfe1708b0c84af0aca80fd4d65b",
+    "migrate_sql": "7cf58c307611ebec07e617add3f18d7fa65eee30c6de16dc2d989d5e4a9da763",
+    "grant_runtime_sql": "456bbf9836b5fede04fa0d914beaca743456ee84452c63db13479667c8e9c134",
+    "02-delivery-schema.sql": "b71231e47693c3957a04b48fe339fbf769778789fa6fd02068edbe8b3cd65b93",
+    "03-grant-delivery.sql": "f7d516a8ac9488bfa0c3dc1d674b836d54363cff966e3376ae14faceadc590a2",
+    "monitor-delivery-size.sql": "2f463107d5a1b052a2ba97e175e562388d8a6367413a4e1020f2ba277c453ec7",
+    "studio_migrate_sql": "a1eb2bbc314144487fd5ba48e89841ec2c9e2960190eb1e8c83bd193fe60c835",
+    "studio_roles_sql": "769fd80e26624598d7e5f42b2db674175ac7cf4a9ba731f94d4eeb1490b4a53f",
+    "studio_grant_runtime_sql": "d662f59548e90615d16b416a208ce8b5813eeb529960cad75fd4b1ef3050ce4a"
+  },
+  "visit_logs_contract": "B: INSERT + SELECT(chain_id, created_at, hash) only",
+  "delivery_contract": "B rev. Infra #17: nexus_public SELECT on delivery.participant_bundles/current_bundle only",
+  "nexus_studio_commit": "877ee90ca840ebe9f842aed4e92b72f50cc90d3c",
+  "studio_migrations": [
+    "20260922142853_InitialCreate",
+    "20260923125620_AddStudioAdmins",
+    "20260924052526_AddEventsAndReferenceData",
+    "20260924064053_AddReferenceEditing",
+    "20260924074426_AddPublishing",
+    "20260924084017_AddRestoreAndLogOrdering",
+    "20260924091059_AddDraftDiagnosis",
+    "20261024100332_AddSpotKindAndDescription",
+    "20261024105839_AddIdReservations",
+    "20261101105414_AddMapDatasetEvidence",
+    "20261101110137_AddMapPublishTarget",
+    "20261101115645_AddParticipantBundles",
+    "20261101124450_HardenBundleMonotonicTrigger",
+    "20261101135153_AddRenameRevisionSource"
+  ]
+}
