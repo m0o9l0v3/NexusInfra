@@ -48,7 +48,8 @@ AFTER_ROLLBACK|0|0|14
 # READER_STILL|1 = that session still active after C5; REPLAY = C3 applied twice; BOM = CI artifact with its BOM accepted by psql as a replay;
 # AFTER_ROLLBACK = NexusStudio README §4 removal SQL leaves 0 Studio roles, 0 studio/delivery schemas, 14 public tables.
 
-## 3. Operator commands of §5.2-5.4 run verbatim (pg17-operator-commands-check.sh; system_identifier masked)
+## 3. Operator commands of §5.2-5.5 run verbatim (pg17-operator-commands-check.sh; system_identifier masked)
+# Re-run 2026-11-02 after PR #24 review: presence-aware delivery_rows in C6 and as the R1 precheck (run after C2, before C3: tables absent -> 0).
 01-roles.sql: OK
 mobile-migrate.sql: OK
 grant-runtime.sql: OK
@@ -99,6 +100,8 @@ refused exit=2
 == C1
 exit=0
 == C2
+== R1 precheck before C3 (delivery tables absent)
+delivery_rows|0
 == C3
 == C4
 == C5
@@ -115,3 +118,22 @@ delivery_rows|0
 == 5.5 history query
       14
 DONE
+
+## 4. Phase 1 restore expectations (PR #24 review)
+# Disposable source cluster shaped like production (POSTGRES_USER=nexus, POSTGRES_DB=nexus) and a restore cluster shaped like
+# compose.pg17-restore.yml (POSTGRES_USER=postgres, POSTGRES_DB=nexus); same image digest, tmpfs, --network none, --rm.
+# Exported with the commands of scripts/backup-pg17-source.sh (pg_dumpall --globals-only --no-role-passwords; pg_dump --format=custom --no-owner --no-acl),
+# restored with pg_restore -U postgres -d nexus --no-owner --no-acl --exit-on-error (globals.sql not applied), then the P3 query as postgres.
+== globals.sql: grep -E '^(CREATE|ALTER) ROLE'
+CREATE ROLE nexus;
+ALTER ROLE nexus WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN REPLICATION BYPASSRLS;
+== pg_restore exit
+0
+== P3 on the restore cluster
+roles|postgres
+schemas|public
+user_tables|0
+databases|nexus,postgres
+nexus_owner|postgres
+extensions|plpgsql
+# roles and nexus_owner differ from production P3 (roles|nexus, nexus_owner|nexus) by construction; the procedure now checks them against this table and globals.sql.

@@ -90,7 +90,8 @@ C3: CIのartifactに記録された`migrate.sql.sha256`、ダウンロードし�
 - C3は`ALTER TABLE studio.… DROP CONSTRAINT`と`DROP INDEX studio.ix_operation_logs_started_at`を含むが、対象はすべて同じSQLの前半で作った`studio`の中のもの
 - C3のCI artifactは先頭にUTF-8のBOMがある。BOMを外した写しで適用した後、BOM付きのartifactをそのまま2回目として流し、psql 17が受け付けて成功することを確かめた（本番ではBOMを外さずに流す。外すとSHA-256が変わる）
 - C3の2回目の適用は何もせずに成功した（冪等）
-- 5節のコマンド（`SHA256SUMS`の照合、P2・P3・P5、B1〜B4、C1の一時clientコンテナ、C2〜C6、5.5節の履歴の問い合わせ）を、別の使い捨てPG17（DBのaliasを持つinternal network付き）に対して書いたとおりに流し、各段の期待値がそのまま出ることを確かめた（[スクリプト](evidence/issue-8/2026-11-02/pg17-operator-commands-check.sh)、出力は上の証跡の3節）。C1は誤った`system_identifier`で終了コード2で拒否され、B1は空のパスワードで終了コード0のまま何も作らなかった
+- 5節のコマンド（`SHA256SUMS`の照合、P2・P3・P5、B1〜B4、C1の一時clientコンテナ、C2〜C6、5.5節の履歴の問い合わせ）を、別の使い捨てPG17（DBのaliasを持つinternal network付き）に対して書いたとおりに流し、各段の期待値がそのまま出ることを確かめた（[スクリプト](evidence/issue-8/2026-11-02/pg17-operator-commands-check.sh)、出力は上の証跡の3節）。C1は誤った`system_identifier`で終了コード2で拒否され、B1は空のパスワードで終了コード0のまま何も作らなかった。R1前の`delivery_rows`は、`delivery`の表がまだ無い状態（C2の後・C3の前）で`0`を返した
+- Phase 1の復元先（`compose.pg17-restore.yml`と同じ`POSTGRES_USER: postgres`）に、`backup-pg17-source.sh`と同じ方法で取ったdumpを戻し、5.1節の期待値（`roles|postgres`・`nexus_owner|postgres`、その他はP3と同じ）と`globals.sql`の2行を確かめた（証跡の4節）
 
 ### 3.2 B（baseline）のrollback境界
 
@@ -211,7 +212,20 @@ psql_su() { docker exec -i -e PGOPTIONS='-c lock_timeout=5s' -e NEXUS_PUBLIC_PAS
 
 [17→18 gate](transition-postgres-17-to-18.md) Phase 1のとおり。`PG17_CONTAINER=<PG17_CONTAINER> PG17_DB_USER=nexus PG17_DB_NAME=nexus PG17_BACKUP_DIR=<root所有0700> ALLOW_PG17_EXPORT=1 scripts/backup-pg17-source.sh`、`SHA256SUMS`の照合、承認した暗号化方式でVPS外（Mac）へコピー、Macの隔離PG17（`compose.pg17-restore.yml`、P1と同じdigest、新規の空volume）への`pg_restore`。
 
-- 合格: Macへのコピーの保存完了時刻・サイズ・SHA-256を記録し、復元したDBでP3と同じ問い合わせが同じ結果になる（今回は空のDBの形を確かめる）
+- 合格: Macへのコピーの保存完了時刻・サイズ・SHA-256を記録し、復元先と`globals.sql`が次の期待値になる（今回は空のDBの形を確かめる）
+- 復元先の期待値はP3と**同じにはならない**。`compose.pg17-restore.yml`はクラスタを`POSTGRES_USER: postgres`で初期化し、`nexus.dump`（`pg_dump`はroleを含まない）を`--no-owner --no-acl`で`postgres`として戻し、`globals.sql`は流さないため。復元先ではP3と同じ問い合わせを`-U postgres -d nexus`で実行し、次と比べる（2026-11-02に使い捨てで確認）:
+
+  | 項目 | 復元先の期待値 | P3（本番）との関係 |
+  |---|---|---|
+  | `roles` | `postgres` | 復元先の初期化ユーザー。本番のroleは下の`globals.sql`で照合する |
+  | `schemas` | `public` | P3と同じ |
+  | `user_tables` | `0` | P3と同じ |
+  | `databases` | `nexus,postgres` | P3と同じ |
+  | `nexus_owner` | `postgres` | `--no-owner`のため。本番の`nexus`とは比べない |
+  | `extensions` | `plpgsql` | P3と同じ |
+
+  加えて、バックアップの`globals.sql`で`grep -E '^(CREATE|ALTER) ROLE' globals.sql`の結果が`CREATE ROLE nexus;`と`ALTER ROLE nexus WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN REPLICATION BYPASSRLS;`の2行だけであること（P3の`roles|nexus`に対応。パスワードは含まれない）。`globals.sql`は照合のために読むだけで、復元先へ流さない（Phase 1の方針どおり）
+- 止める条件（A）: 上の表か`globals.sql`の行が違う。`schemas`・`user_tables`・`databases`・`extensions`がP3と違う場合は、dumpの取り違えか本番の状態の変化として扱う
 - 止める条件: どれか1つでも失敗。**Aが合格するまでBを実行しない**（Bを戻す唯一の手段がこの復元）
 - 注: dumpは`--no-role-passwords`・`--no-owner --no-acl`。復元で戻るのは「空の`nexus` DB」の形で、`nexus`のパスワードやACLは戻らない。R2を計画するときはこの点を含める
 
@@ -284,7 +298,7 @@ SELECT 'public_cannot_use_studio', NOT has_schema_privilege('nexus_public', 'stu
 SELECT 'app_cannot_write_history', NOT has_table_privilege('nexus_studio_app', 'studio."__EFMigrationsHistory"', 'INSERT');
 SELECT 'migrator_no_db_create', NOT has_database_privilege('nexus_studio_migrator', 'nexus', 'CREATE');
 SELECT 'public_tables_unchanged', count(*) FROM pg_tables WHERE schemaname = 'public';
-SELECT 'delivery_rows', (SELECT count(*) FROM delivery.participant_bundles) + (SELECT count(*) FROM delivery.current_bundle);
+SELECT 'delivery_rows', (CASE WHEN to_regclass('delivery.participant_bundles') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.participant_bundles', false, true, '')))[1]::text::bigint END) + (CASE WHEN to_regclass('delivery.current_bundle') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.current_bundle', false, true, '')))[1]::text::bigint END);
 SQL
 ```
 
@@ -303,7 +317,13 @@ docker exec -i --user postgres "$C" psql -X -At -U nexus_studio_migrator -d nexu
 出力を1.2節の14本と照らし、どこまで入ったか・最初に失敗した移行・エラーの文（秘密を含まない部分）をIssueに記録する。そこで止め、次のどちらにするかを利用者が決める。
 
 - 原因を直し、同じ`studio-migrate.sql`（SHA-256同じ）を再実行して残りを入れる。その後C4〜C6
-- R1（別承認）で取り除き、C1からやり直す。R1のSQL（NexusStudio README §4。superuserで1回だけ。`delivery`に行が無いことをC6の`delivery_rows`で確かめてから）:
+- R1（別承認）で取り除き、C1からやり直す。R1の前に、bundleが1行も無いことを次の問い合わせで確かめる（`delivery`の表がまだ無い段階、つまり`20261101115645_AddParticipantBundles`より前で失敗した場合も0を返す。表がある分だけ数える。C6の`delivery_rows`と同じ式）:
+
+  ```sh
+  psql_su -A -t -c "SELECT 'delivery_rows', (CASE WHEN to_regclass('delivery.participant_bundles') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.participant_bundles', false, true, '')))[1]::text::bigint END) + (CASE WHEN to_regclass('delivery.current_bundle') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.current_bundle', false, true, '')))[1]::text::bigint END)"
+  ```
+
+  期待値は`delivery_rows|0`。0でなければR1を使わない（3.3節）。R1のSQL（NexusStudio README §4。superuserで1回だけ）:
 
   ```sql
   BEGIN;

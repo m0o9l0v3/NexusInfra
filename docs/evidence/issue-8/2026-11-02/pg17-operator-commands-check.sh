@@ -71,6 +71,7 @@ c1() { docker run --rm -i --network "$NET" --user root \
 c1 1 && echo "UNEXPECTED success" || echo "refused exit=$?"
 echo "== C1"; c1 "$SYSID" > /dev/null; echo "exit=$?"
 echo "== C2"; psql_su -v studio_migrator=nexus_studio_migrator -v studio_app=nexus_studio_app < 02-delivery-schema.sql > /dev/null
+echo "== R1 precheck before C3 (delivery tables absent)"; psql_su -A -t -c "SELECT 'delivery_rows', (CASE WHEN to_regclass('delivery.participant_bundles') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.participant_bundles', false, true, '')))[1]::text::bigint END) + (CASE WHEN to_regclass('delivery.current_bundle') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.current_bundle', false, true, '')))[1]::text::bigint END)"
 echo "== C3"; docker exec -i -e PGOPTIONS='-c lock_timeout=5s' --user postgres "$C" psql -X -v ON_ERROR_STOP=1 -U nexus_studio_migrator -d nexus < studio-migrate.sql > /dev/null
 echo "== C4"; psql_su < grant-studio-runtime.sql > /dev/null
 echo "== C5"; psql_su -v studio_migrator=nexus_studio_migrator -v studio_app=nexus_studio_app < 03-grant-delivery.sql > /dev/null
@@ -84,7 +85,7 @@ SELECT 'public_cannot_use_studio', NOT has_schema_privilege('nexus_public', 'stu
 SELECT 'app_cannot_write_history', NOT has_table_privilege('nexus_studio_app', 'studio."__EFMigrationsHistory"', 'INSERT');
 SELECT 'migrator_no_db_create', NOT has_database_privilege('nexus_studio_migrator', 'nexus', 'CREATE');
 SELECT 'public_tables_unchanged', count(*) FROM pg_tables WHERE schemaname = 'public';
-SELECT 'delivery_rows', (SELECT count(*) FROM delivery.participant_bundles) + (SELECT count(*) FROM delivery.current_bundle);
+SELECT 'delivery_rows', (CASE WHEN to_regclass('delivery.participant_bundles') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.participant_bundles', false, true, '')))[1]::text::bigint END) + (CASE WHEN to_regclass('delivery.current_bundle') IS NULL THEN 0 ELSE (xpath('/row/c/text()', query_to_xml('SELECT count(*) AS c FROM delivery.current_bundle', false, true, '')))[1]::text::bigint END);
 SQL
 echo "== 5.5 history query"; docker exec -i --user postgres "$C" psql -X -At -U nexus_studio_migrator -d nexus -c 'SELECT "MigrationId" FROM studio."__EFMigrationsHistory" ORDER BY 1' | wc -l
 echo "DONE"
