@@ -1,0 +1,21 @@
+PASS: identity: 200
+INFO: version=2 schema=2.1.0 length=7043 sha256=7e99588f941922029bdd2bf19378ff23e9a71b9ea4208508f679261bd758c21a recheck=300 etag="sha256-7e99588f941922029bdd2bf19378ff23e9a71b9ea4208508f679261bd758c21a"
+PASS: identity: Nexus-Bundle-* and Nexus-Recheck-After present
+PASS: identity: ETag is "sha256-<Nexus-Bundle-Sha256>"
+PASS: identity: body SHA-256 and length match headers (7043 bytes)
+PASS: version is 2
+INFO: body nexus_bundle 2.1.0 2 spots 2 map present categories 1 occurrences 2 events 1
+PASS: identity: ETag sent back -> 304
+PASS: gzip: 200, Content-Encoding gzip, ETag "sha256-7e99588f941922029bdd2bf19378ff23e9a71b9ea4208508f679261bd758c21a-gzip"
+PASS: gzip: Nexus-Bundle-Sha256/Version preserved
+PASS: gzip: its ETag sent back -> 304
+PASS: gzip ETag with identity -> 200 (Accept-Encoding changed)
+PASS: zstd: 200, Content-Encoding zstd, ETag "sha256-7e99588f941922029bdd2bf19378ff23e9a71b9ea4208508f679261bd758c21a-zstd"
+PASS: zstd: Nexus-Bundle-Sha256/Version preserved
+PASS: zstd: its ETag sent back -> 304
+PASS: zstd ETag with identity -> 200 (Accept-Encoding changed)
+PASS: stale ETag -> 200
+PASS: CORS: /health allows https://www.localhost
+PASS: CORS: /api/v2/bundle has no Access-Control-Allow-Origin
+PASS: CORS: /health rejects another origin
+RESULT: 0 failure(s)

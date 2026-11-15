@@ -1,0 +1,2 @@
+preview: ok blocking 0 warning 0
+publish: succeeded release 1 公開

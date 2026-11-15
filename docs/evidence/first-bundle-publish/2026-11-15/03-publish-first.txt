@@ -1,0 +1,4 @@
+signed in as リハーサル管理者 | environment label: None
+preview: status ok blocking 0 warning 0
+publish: succeeded release sequence 1 detail 公開
+resend same operationId: succeeded sequence 1 (no new release)

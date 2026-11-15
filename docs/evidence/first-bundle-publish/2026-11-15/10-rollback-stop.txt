@@ -1,0 +1,17 @@
+# 注記: 1回目の再公開の試行は、手元のシェルの引数の誤り（curl の --resolve）と、リハーサル用スクリプトが同じ開催日を追加しようとして Studio に 400（duplicate_date）で拒否されたため、やり直した（DB は変わっていない）。以下はその行を除いたもの。
+== emergency stop: owner (nexus_studio_migrator) removes the pointer row only
+BEGIN
+DELETE 1
+bundles_kept|3
+COMMIT
+== next Studio publish recreates the pointer (INSERT ... ON CONFLICT path)
+signed in as リハーサル管理者 | environment label: None
+== (pointer was removed by the owner above)
+{"type":"urn:nexus:problem:bundle-not-published","title":"Bundle not published","status":404} -> 404
+== next Studio publish recreates the pointer (INSERT ... ON CONFLICT path)
+signed in as リハーサル管理者 | environment label: None
+preview: status ok blocking 0 warning 0
+publish: succeeded release sequence 4 detail 公開
+resend same operationId: succeeded sequence 4 (no new release)
+HTTP/2 200 
+nexus-bundle-version: 4

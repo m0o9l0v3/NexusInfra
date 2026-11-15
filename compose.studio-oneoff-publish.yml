@@ -1,0 +1,51 @@
+# One-off Studio publish session on the PG17 host (first participant bundle; docs/first-bundle-publish.md).
+# NOT the hosted Studio (#9): nothing is reachable from the internet. Caddy listens on the host loopback only and is
+# reached through `ssh -L`. Start it for one publish session, then stop it with `-p` and remove its volume by name.
+# Never combine with compose.yaml / compose.pg17-edge.yaml. It joins the live DB network only through studio-api.
+name: ${STUDIO_ONEOFF_PROJECT:?set a dated one-off project name, e.g. nexus-studio-oneoff-YYYYMMDD}
+services:
+  studio-api:
+    image: ${STUDIO_ONEOFF_API_IMAGE:?pin a reviewed studio-api image (digest or locally loaded ID)}
+    restart: "no"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__StudioDatabaseFile: /run/secrets/studio_connection
+      ReverseProxy__TrustedNetwork: ${STUDIO_ONEOFF_SUBNET:?set a reviewed private /24-/28 subnet}
+      DataProtection__KeysDirectory: /var/lib/nexus-studio/dataprotection-keys
+    secrets: [studio_connection]
+    volumes:
+      - dataprotection_keys:/var/lib/nexus-studio/dataprotection-keys
+    networks: [backend, oneoff]
+    logging: &logs
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  studio-web:
+    image: ${STUDIO_ONEOFF_WEB_IMAGE:?pin a reviewed studio-web image (digest or locally loaded ID)}
+    restart: "no"
+    networks: [oneoff]
+    logging: *logs
+  caddy:
+    image: ${STUDIO_ONEOFF_CADDY_IMAGE:?pin the adopted Caddy digest}
+    restart: "no"
+    # Host loopback only. Reach it with: ssh -L 8443:127.0.0.1:${STUDIO_ONEOFF_PORT} <vps>
+    ports: ["127.0.0.1:${STUDIO_ONEOFF_PORT:?set a free loopback port}:8443"]
+    volumes:
+      - ./Caddyfile.studio-oneoff:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks: [oneoff]
+    depends_on: [studio-api, studio-web]
+    logging: *logs
+networks:
+  backend:
+    external: true
+    name: ${STUDIO_ONEOFF_BACKEND_NETWORK:?inspect the live PG17 network name}
+  oneoff:
+    ipam:
+      config:
+        - subnet: ${STUDIO_ONEOFF_SUBNET:?set a reviewed private /24-/28 subnet}
+volumes:
+  dataprotection_keys: {}
+  caddy_data: {}
+secrets:
+  studio_connection:
+    file: ${STUDIO_ONEOFF_SECRET_DIR:?private directory}/studio_connection

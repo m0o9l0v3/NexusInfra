@@ -1,0 +1,7 @@
+rehearsal: 2026-11-16 (JST), colima nexus-db-verify (linux/arm64), disposable; no production contact
+DB built with docs/evidence/first-bundle-publish/2026-11-15/rehearsal/rehearse-db.sh (same inputs, SHA-256 as 2026-11-15)
+nexus-studio 165d4687d5b8a02b78fe5d470a309592a2c16022; studio-api image sha256:d5aa7b3d143ac92f5db13515899ba8d1ccdb3e935e3c1e20b27c1252fd6d35eb
+public-api f42d9dad6c1ef1d87af8b15808bb44f9c6ff4b34 image sha256:2d9a618655db12ed00002170099283eae5f0fc32f5efc7b5f625d4d0bd496efb
+iOS app nexus-mobile origin/develop 43a2dbdb12208c6a9c1e1d0872ebcfc0dfd9dcb9, simulator iPhone 17 (iOS 26.x), Debug + Local.xcconfig, rehearsal Caddy root CA added to the simulator keychain
+stage A: occurrence only, 2026-11-14 10:00-13:30 (owner's real schedule frame; name is a proposal); simulator clock 2026-11-16 JST
+stage map: Studio test fixture map (docs/schemas/examples/map-dataset-geojson-v2.example.json) with the test approved settings from MapPublishingTests (not campus data), 2 spots, 1 fictional event

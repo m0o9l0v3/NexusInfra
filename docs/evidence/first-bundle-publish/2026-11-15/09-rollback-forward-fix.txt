@@ -1,0 +1,5 @@
+signed in as リハーサル管理者 | environment label: None
+preview: status ok blocking 0 warning 0
+publish: succeeded release sequence 3 detail 取り下げ
+resend same operationId: succeeded sequence 3 (no new release)
+after forward-fix: bundle_version 3 occurrences 0 categories 2

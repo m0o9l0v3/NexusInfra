@@ -1,0 +1,13 @@
+# before publish (2026-11-15T14:39:50Z)
+HTTP/2 404 
+alt-svc: h3=":443"; ma=2592000
+content-type: application/problem+json
+date: Sun, 15 Nov 2026 14:39:50 GMT
+referrer-policy: strict-origin-when-cross-origin
+strict-transport-security: max-age=31536000
+via: 1.1 Caddy
+x-content-type-options: nosniff
+x-frame-options: DENY
+
+{"type":"urn:nexus:problem:bundle-not-published","title":"Bundle not published","status":404}
+health 200

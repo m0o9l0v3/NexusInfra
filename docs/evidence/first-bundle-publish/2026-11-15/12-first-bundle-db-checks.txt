@@ -1,0 +1,29 @@
+== state (nexus_studio_app)
+bundles|4|4
+current|4
+sha_ok|t
+PASS: current bundle_version is 4
+PASS: every stored payload matches its sha256 and byte_length
+== nexus_public (public-api)
+PASS: allowed (nexus_public): SELECT participant_bundles -> 4 
+PASS: allowed (nexus_public): SELECT current_bundle -> 4 
+PASS: denied 42501 (nexus_public): INSERT participant_bundles
+PASS: denied 42501 (nexus_public): UPDATE participant_bundles
+PASS: denied 42501 (nexus_public): DELETE participant_bundles
+PASS: denied 42501 (nexus_public): UPDATE current_bundle
+PASS: denied 42501 (nexus_public): DELETE current_bundle
+PASS: denied 42501 (nexus_public): read studio schema
+== nexus_studio_app (Studio runtime)
+PASS: allowed (nexus_studio_app): SELECT both tables -> 4|4 
+PASS: denied 42501 (nexus_studio_app): UPDATE participant_bundles
+PASS: denied 42501 (nexus_studio_app): DELETE participant_bundles
+PASS: denied 42501 (nexus_studio_app): TRUNCATE participant_bundles
+PASS: denied 42501 (nexus_studio_app): DELETE current_bundle
+PASS: denied 42501 (nexus_studio_app): disable the monotonic trigger
+PASS: denied 23514 (nexus_studio_app): move the pointer backwards (4 -> 3)
+PASS: allowed (nexus_studio_app): INSERT a bundle and move the pointer forward (rolled back) -> INSERT 0 1 INSERT 0 1 inside_txn_current|1000004 
+== nexus_studio_migrator (owner of delivery)
+PASS: denied 23514 (nexus_studio_migrator): owner: move the pointer backwards (4 -> 3)
+== state again (must be unchanged)
+PASS: state unchanged
+RESULT: 0 failure(s)

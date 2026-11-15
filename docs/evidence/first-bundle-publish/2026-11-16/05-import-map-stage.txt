@@ -1,0 +1,7 @@
+ Container nexus-studio-oneoff-fbp20261116-studio-api-run-3e419e72a17b Creating 
+ Container nexus-studio-oneoff-fbp20261116-studio-api-run-3e419e72a17b Created 
+warn: Microsoft.EntityFrameworkCore.Model.Validation[20600]
+Spot: 追加 2件・更新 0件
+warn: Microsoft.EntityFrameworkCore.Model.Validation[20600]
+地図: v1 を下書きとして取り込みました（sha256 72f20889b76e512fc2b5d312e150b5654a997e65ebd4d44a40c562c20bddd27b、根拠 あり）
+公開確認: /map-data/publish?revision=01a1dfc1-d129-7798-b76e-b1d4f0ab4c94

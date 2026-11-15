@@ -14,6 +14,7 @@
 - [PG17公開レイヤーの決定記録](docs/pg17-edge-decisions.md)：rate limitのproxy信頼、digest発行経路、CORS originの採用内容と残る確認
 - [現行PG17向けAPI公開レイヤー（本番未適用）](docs/pg17-public-edge.md#8-実装構成と環境変数)：独立Compose・env・安全検査・手動導入・rollback・隔離検証
 - [PG17 baselineとpublic-api runtime role](docs/pg17-baseline.md)：Mobile移行経路の調査、role契約、隔離PG17での構築・検証（本番未適用）
+- [最初の参加者bundleの公開（本番未適用）](docs/first-bundle-publish.md)：Studioを常設せずにVPSの一時Studioで公開する手順、確認、切り戻し、2026-11-15のリハーサル（Issue #17）
 - [構成](docs/architecture.md)・[導入](docs/deployment.md)・[DB migration](docs/migration.md)
 - [18移行後のバックアップと復元](docs/backup-restore.md)・[災害復旧](docs/disaster-recovery.md)・[本番適用前チェック](docs/security-checklist.md)
 

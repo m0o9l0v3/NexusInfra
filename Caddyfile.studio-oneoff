@@ -1,0 +1,27 @@
+# One-off Studio publish session (compose.studio-oneoff-publish.yml). Loopback only, internal CA.
+# The browser reaches it as https://localhost:8443 through `ssh -L`; no ACME, no public name.
+{
+    admin off
+    auto_https disable_redirects
+}
+
+https://localhost:8443 {
+    tls internal
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        X-Frame-Options "DENY"
+        -Server
+    }
+    handle /api/* {
+        reverse_proxy studio-api:8080 {
+            header_up X-Forwarded-Proto https
+        }
+    }
+    handle /health {
+        reverse_proxy studio-api:8080
+    }
+    handle {
+        reverse_proxy studio-web:8080
+    }
+}

@@ -1,0 +1,29 @@
+== state before
+bundles|1:669:6aabdfae1103,2:816:897520bd01df
+current|2
+== nexus_public (public-api)
+PASS: allowed: SELECT participant_bundles -> 2 
+PASS: allowed: SELECT current_bundle -> 2 
+PASS: denied (42501): INSERT participant_bundles
+PASS: denied (42501): UPDATE participant_bundles
+PASS: denied (42501): DELETE participant_bundles
+PASS: denied (42501): UPDATE current_bundle (pointer back)
+PASS: denied (42501): DELETE current_bundle
+PASS: denied (42501): SELECT studio.releases
+== nexus_studio_app (Studio runtime)
+PASS: allowed: SELECT both tables -> 2|2 
+PASS: denied (42501): UPDATE participant_bundles
+PASS: denied (42501): DELETE participant_bundles
+PASS: denied (42501): TRUNCATE participant_bundles
+PASS: denied (42501): DELETE current_bundle
+PASS: denied (23514): pointer backwards 2 -> 1 (trigger)
+PASS: denied (23): second pointer row (CHECK/PK)
+PASS: denied (23503): pointer to a missing version (FK)
+PASS: allowed: INSERT a bundle and move the pointer forward (then ROLLBACK) -> BEGIN INSERT 0 1 UPDATE 1 inside_txn_current|99 ROLLBACK 
+PASS: denied (42501): ALTER TABLE DISABLE TRIGGER
+== nexus_studio_migrator (owner)
+PASS: denied (23514): owner: pointer backwards 2 -> 1 (trigger applies to the owner too)
+== state after (must equal before)
+bundles|1:669:6aabdfae1103,2:816:897520bd01df
+current|2
+RESULT: 0 failure(s)

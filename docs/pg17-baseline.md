@@ -125,6 +125,8 @@ edge（Caddy）経由（E2-5 O-4b、I4）。2026-10-25に隔離環境で実施�
 
 304は成立したため、`HEAD /api/v2/bundle`の追加は求めない。NexusMobile #23はこの結果を待ってCloseする（`Content-Length`の注記を含めて#23に伝える）。
 
+2026-11-15の再確認（最初のbundleの公開の準備）: 本番と同じ順序（#8のB1〜C6）で作った使い捨てPG17.11に、**Studioの実際の公開**（`165d468`、Production設定の一時Studio）でbundleを書き込み、上の権限の項目（後退・UPDATE・DELETEの拒否、Studio実行時roleのINSERTと前進）とCaddy経由の確認がすべて成立した（[first-bundle-publish.md](first-bundle-publish.md) 7節）。本番での確認は同書5節で行う。
+
 ## 5. 隔離baselineの構築と検証
 
 `compose.pg17-baseline.yml`と`scripts/pg17-baseline.py`は、**現行と同じ形（`nexus`/`nexus`、PG17）の使い捨てコンテナ**を新しい空volumeに作る。`nexus_postgres_data`や既存project名は拒否し、同じエンジンにlive container/volumeがあれば中止する。ポート公開なし。

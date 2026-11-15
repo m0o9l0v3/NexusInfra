@@ -1,0 +1,8 @@
+preview: ok blocking 1 warning 0
+  finding: info spot_used_by_published_events 公開中のイベント（架空の模擬授業（試験））の会場表示にも反映されます。
+  finding: blocking description_required 説明を入力してください。
+blocked; not publishing
+preview: ok blocking 0 warning 1
+  finding: info spot_used_by_published_events 公開中のイベント（架空の模擬授業（試験））の会場表示にも反映されます。
+  finding: warning bundle_grew 参加者向けの配信データが、いま配信している版（0.00 MiB）の1.5倍以上（0.01 MiB）になります。意図した増加か確認してください。
+publish: succeeded release 2 公開
