@@ -25,10 +25,38 @@ docker compose -f compose.pg17-restore.yml config --quiet
 docker compose -f compose.pg17-restore.yml up -d --wait
 docker compose -f compose.pg17-restore.yml exec -T postgres postgres --version # 17系であることを確認
 (cd "$PG17_BACKUP_COPY_DIR" && sha256sum -c SHA256SUMS)
+```
+
+続く`pg_restore`は、ダンプが[baseline](pg17-baseline.md)（[Issue #8適用資料](pg17-issue-8-production-apply.md)の承認B）の適用前か後かで分ける。
+
+baselineの**適用前**のダンプ（Nexusの表が無い）:
+
+```sh
 docker compose -f compose.pg17-restore.yml exec -T postgres \
   pg_restore -U postgres -d "$PG17_DB_NAME" --no-owner --no-acl --exit-on-error \
   < "$PG17_BACKUP_COPY_DIR/nexus.dump"
 ```
+
+baselineの**適用後**のダンプは、**ロールを先に作り、`nexus_owner`として戻し、権限を後から付ける**。`spots`・`events`のRLSポリシーが`nexus_public`・`nexus_admin_app`を名指しするので、ロールの無い復元先では上の例は`role "nexus_admin_app" does not exist`で止まる。`--no-owner`だけでは表の所有者が`postgres`になり、後の移行（`SET ROLE nexus_owner`）が表を変えられない。`--no-acl`なのでGRANTはダンプから入らない。
+
+```sh
+# (1) ロール。nexus_publicのパスワードは復元先用に新しく作り、私有ファイルから読む（値を表示しない）
+export NEXUS_PUBLIC_PASSWORD="$(cat <復元用の私有ディレクトリ>/nexus_public_password)"
+docker exec -i -e NEXUS_PUBLIC_PASSWORD "$(docker compose -f compose.pg17-restore.yml ps -q postgres)" \
+  psql -X -q -v ON_ERROR_STOP=1 -U postgres -d "$PG17_DB_NAME" < sql/pg17-baseline/01-roles.sql
+unset NEXUS_PUBLIC_PASSWORD
+# (2) 所有者をnexus_ownerにして戻す
+docker compose -f compose.pg17-restore.yml exec -T postgres \
+  pg_restore -U postgres -d "$PG17_DB_NAME" --no-owner --no-acl --role=nexus_owner --exit-on-error \
+  < "$PG17_BACKUP_COPY_DIR/nexus.dump"
+# (3) 権限。grant-runtime.sqlはNexusMobileのレビュー済みファイル（SHA-256はIssue #8適用資料 1.2節）
+{ printf 'SET ROLE nexus_owner;\n'; cat <NexusMobile>/deploy/database/grant-runtime.sql; } | \
+  docker compose -f compose.pg17-restore.yml exec -T postgres psql -X -q -v ON_ERROR_STOP=1 -U postgres -d "$PG17_DB_NAME"
+```
+
+`NEXUS_PUBLIC_PASSWORD`が空だと`01-roles.sql`は何もせず終了コード0で終わる（Issue #8適用資料 3.2節）ので、復元後に`nexus_public`があることを確かめる。復元後の照合（移行履歴・件数・`map_datasets`のchecksum・監査ログ・所有者と権限）と合否基準はNexusMobileの[バックアップと復元の手順](https://github.com/m0o9l0v3/NexusMobile/blob/develop/docs/backup-restore.md)に従う。Studioの`studio`・`delivery`があるダンプ（承認Cの後）は、(1)の後にStudioのロールも先に作る必要があり、まだリハーサルしていない。
+
+この順序は2026-11-14に使い捨てのPG17.11（`postgres@sha256:b0f9560a…`）で確かめた。baselineを当てた元DBのダンプを`backup-pg17-source.sh`と同じ方法で取り、本Composeと新規空volumeへ戻した。適用前の例のままでは上のエラーで失敗し、(1)〜(3)では照合値が元と一致し、復元先でpublic-apiが起動した（[リハーサル記録](https://github.com/m0o9l0v3/NexusMobile/blob/c391095550945adae191756732020137d795db0f/docs/verification/backup-restore-2026-11-14/README.md)、`tools/database/rehearse-pg17-restore.sh`）。
 
 Macに`sha256sum`がなければ`shasum -a 256 -c SHA256SUMS`を使う。復元は**自動削除・切替をしない**。事前にvolumeが空でない場合は停止し、新規volumeを使う。`globals.sql`は既存roleとの衝突と認証情報欠落をレビューし、盲目的に実行しない。DBごとにschema、件数、代表レコード、拡張、所有者・権限を照合する。Nexus以外のDBがあればそれらも復元対象に含める。元volumeの識別子と内容が変わっていないことを記録する。復元失敗時は切替計画へ進まない。
 
