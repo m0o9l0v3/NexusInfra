@@ -58,7 +58,9 @@ C3: CIのartifactに記録された`migrate.sql.sha256`、ダウンロードし�
 
 **SQL全文のレビュー**: B1・C2・C5・B3・C1・C4は上のcommitのファイルそのもの。B2とC3は上の手順で生成したファイルを読む。`pg17-baseline.py manifest`が機械的に確かめていること: B2は移行ID 2本だけ・`SET ROLE nexus_owner`で始まる・ROLE/GRANT/REVOKE/DROP/TRUNCATE/COPYを含まない・既存schemaの拒否とadvisory lockを含む。C3は移行IDがソースの14本と一致・配信の2移行を含む・ROLE/SET ROLE/GRANT/REVOKE/TRUNCATE/COPY/`public.`を含まない・`studio`/`delivery`以外に表や索引を作らない。Studio APIもpublic-apiも起動時に移行しない。
 
-**入力が変わったら止める**: 適用日に、NexusStudio `develop`の`877ee90`以降に`apps/studio-api/Migrations`か`deploy/database`の変更がある、NexusMobile `develop`の`6f1b079`以降に`apps/admin-api/Migrations`・`deploy/database`・`tools/database`の変更がある、またはNexusInfraの`sql/pg17-baseline`が変わっている場合は、適用せず、隔離検証（[pg17-baseline.md](pg17-baseline.md) §5）とこの表を更新して再レビューする。
+**入力が変わったら止める**: 適用日に、NexusStudio `develop`の`877ee90`以降に`apps/studio-api/Migrations`か`deploy/database`の変更がある、NexusMobile `develop`の`6f1b079`以降に`apps/nexus-data/Migrations`・`deploy/database`・`tools/database`の変更がある、またはNexusInfraの`sql/pg17-baseline`が変わっている場合は、適用せず、隔離検証（[pg17-baseline.md](pg17-baseline.md) §5）とこの表を更新して再レビューする。
+
+2026-11-14追記: NexusMobileの移行は[#181](https://github.com/m0o9l0v3/NexusMobile/pull/181)で`apps/admin-api/Migrations`から`apps/nexus-data/Migrations`へ移った（名前の変更だけで、内容の差分なし）。移動後の`develop`で生成した移行SQLのSHA-256は`7cf58c307611ebec07e617add3f18d7fa65eee30c6de16dc2d989d5e4a9da763`のままで、B2の固定値と同じ（NexusMobile #181のCI、2026-11-14の[復元リハーサル](https://github.com/m0o9l0v3/NexusMobile/blob/c391095550945adae191756732020137d795db0f/docs/verification/backup-restore-2026-11-14/inputs.txt)）。差分は`git diff --stat -M 6f1b079 <適用日のcommit> -- apps/admin-api/Migrations apps/nexus-data/Migrations deploy/database tools/database`で見る（移動は0行の変更として出る）。
 
 ## 2. 順序表
 
