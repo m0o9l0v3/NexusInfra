@@ -4,6 +4,8 @@
 set -u
 API=${API:?} SITE_ORIGIN=${SITE_ORIGIN:?}
 X=${CURL_EXTRA:-}
+# Caddy encode does not compress bodies shorter than this (minimum_length default). Larger bodies must be compressed.
+MIN_COMPRESS=${MIN_COMPRESS:-512}
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 fails=0
 pass() { echo "PASS: $*"; }
@@ -35,7 +37,8 @@ for enc in gzip zstd; do
   s=$(get $enc -H "Accept-Encoding: $enc")
   e=$(hdr "$T/$enc.h" ETag); ce=$(hdr "$T/$enc.h" Content-Encoding)
   if [ "$s" = 200 ] && [ "$ce" = "$enc" ] && [ "$e" = "\"sha256-$sha-$enc\"" ]; then pass "$enc: 200, Content-Encoding $enc, ETag $e"
-  elif [ "$s" = 200 ] && [ -z "$ce" ] && [ "$e" = "$etag" ]; then echo "NOTE: $enc: 200 without compression (body below Caddy's minimum length); suffix check not applicable"
+  elif [ "$s" = 200 ] && [ -z "$ce" ] && [ "$e" = "$etag" ] && [ "$body_len" -lt "$MIN_COMPRESS" ]; then
+    echo "NOTE: $enc: 200 without compression ($body_len bytes < Caddy's $MIN_COMPRESS-byte minimum); suffix check not applicable"
   else fail "$enc: status $s, Content-Encoding '$ce', ETag $e"; fi
   [ "$(hdr "$T/$enc.h" Nexus-Bundle-Sha256)" = "$sha" ] && [ "$(hdr "$T/$enc.h" Nexus-Bundle-Version)" = "$ver" ] && pass "$enc: Nexus-Bundle-Sha256/Version preserved" || fail "$enc: Nexus headers changed"
   s=$(get ${enc}304 -H "Accept-Encoding: $enc" -H "If-None-Match: $e")

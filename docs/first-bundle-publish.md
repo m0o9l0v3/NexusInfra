@@ -109,7 +109,7 @@ Studio の公開前検証（`CandidateValidator`、develop `165d468`）の事実
 | # | 承認すること | 影響 |
 |---|---|---|
 | P-1 | 2節の中身 | 参加者のアプリに表示される |
-| P-2 | 公開前のバックアップ（[pg17-issue-8-production-apply.md](pg17-issue-8-production-apply.md) 5.1節と同じ形） | 6節 R3 の唯一の手段 |
+| P-2 | 公開前のバックアップ（取り方は [pg17-issue-8-production-apply.md](pg17-issue-8-production-apply.md) 5.1節、合格条件は 4.3節） | 6節 R3 の唯一の手段 |
 | P-3 | VPS でのイメージのビルド（`mcr.microsoft.com/dotnet/sdk:10.0`・`aspnet:10.0`・`node:22-alpine`・`caddy:2-alpine` の取得を含む） | ディスク使用量（1〜2 GB）。終了後に削除できる |
 | P-4 | 一時 Studio の起動と、最初の管理者の登録（`admin add`） | 管理者は Studio に残る（#9 で常設するときもそのまま使う） |
 | P-5 | 公開の実行 | `delivery` に版 1 ができ、`/api/v2/bundle` が 200 になる。戻せない |
@@ -149,7 +149,15 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.nexus-app.jp/api/v2/bundle 
 
 ### 4.3 バックアップ（P-2）
 
-[pg17-issue-8-production-apply.md](pg17-issue-8-production-apply.md) 5.1節（`scripts/backup-pg17-source.sh`、Mac へのコピー、別 volume への復元確認）と同じ。合格するまで先へ進まない。
+取り方は [pg17-issue-8-production-apply.md](pg17-issue-8-production-apply.md) 5.1節と同じ（`scripts/backup-pg17-source.sh` で `globals.sql`・`cluster.sql`・`nexus.dump` と `SHA256SUMS`、暗号化して Mac へコピーし SHA-256 を照合）。**合格条件は 5.1節の表（空の DB の形）を使わない。** #8 の B・C の後なので `studio`・`delivery`、移行履歴、Studio のロールがあり、あの表には合わない。代わりに次で判定する（2026-11-16 に隔離環境で確認、7.7節）。
+
+1. `globals.sql` のロールの行（`grep -E '^(CREATE|ALTER) ROLE' globals.sql`）が次の6つだけで、`PASSWORD` を含まない: `nexus`（SUPERUSER …）、`nexus_admin_app`（NOLOGIN）、`nexus_owner`（NOLOGIN）、`nexus_public`・`nexus_studio_app`・`nexus_studio_migrator`（LOGIN、NOSUPERUSER・NOCREATEDB・NOCREATEROLE・NOBYPASSRLS）。
+2. `docker exec -i --user postgres <PG17_CONTAINER> pg_restore -l < nexus.dump > /dev/null` が成功する（スクリプトが行う）。
+3. Mac の隔離 PG17（本番と同じ image、新しい空 volume、`internal` network、`POSTGRES_USER=nexus`・`POSTGRES_DB=postgres`）に **`cluster.sql` を `psql -X -q -U nexus -d postgres < cluster.sql` で流す**。エラーは `role "nexus" already exists` の1件だけであること（初期化ユーザーと同じ名前のため）。ロールのパスワードは戻らない（`--no-role-passwords`）。
+4. NexusInfra `sql/pg17-baseline/restore-fingerprint-post-c.sql`（読み取りだけ。ロール・スキーマ・所有者・実効 ACL・各表の行数・RLS・トリガー・関数・両方の移行履歴・`delivery` の状態）を、本番（`docker exec -i --user postgres <PG17_CONTAINER> psql -X -U nexus -d nexus < restore-fingerprint-post-c.sql > fp-source.txt`）と復元先で実行し、**`diff` が空**であること。出力に秘密は含まれないが、私有メモ側に保存する。
+5. 公開前の期待値の一部: `delivery_current|none`、`delivery_payload_sha|none`、`studio_history` が16件、`trigger|delivery.current_bundle|current_bundle_monotonic|O|…`。
+
+`nexus.dump`（`--no-owner --no-acl`）だけからの復元は、`studio`・`delivery` の所有者（`nexus_studio_migrator`）を戻せず、まだリハーサルしていない。6節 R3 で復元するときは `cluster.sql` を使う。合格するまで先へ進まない。
 
 ### 4.4 イメージのビルド（P-3、VPS でネイティブに）
 
@@ -318,3 +326,7 @@ PG17.11（`postgres@sha256:b0f9560a…`）の新しい volume に、[pg17-issue-
 4. **iOS（版 2）**: アプリの再起動で版 2 に切り替わった（`current: v2`、`previous: v1`）。ホームは未来の開催日（開催前）とイベントを表示し、過去の開催日は出さない。地図は建物を描画した（`ios-map-stage-*-{light,dark}.png`）。
 
 シミュレーターには先のリハーサルで保存した版 4 が残っていたため、アプリを消してから入れ直した。iOS は自分の版より低い版を受け取らないので、試験の端末を本番に向けるときも、別の環境で取得した版が残っていないかを確かめる（本番の版は 1 から始まる）。
+
+### 7.7 #8 適用後のバックアップと復元（2026-11-16）
+
+証跡: [docs/evidence/first-bundle-publish/2026-11-16-backup/](evidence/first-bundle-publish/2026-11-16-backup/)。7.1節と同じ手順で作った B・C 適用後の使い捨て PG17.11 に `public.spots` を1行入れ、`backup-pg17-source.sh` と同じ3つの出力（`pg_dumpall --globals-only --no-role-passwords`、`pg_dumpall --no-role-passwords`、`pg_dump --format=custom --no-owner --no-acl`）を取った。`nexus.dump` は `pg_restore -l` で読めた。`globals.sql` のロールの行は 4.3節の6つだった。新しい空の PG17.11（`POSTGRES_USER=nexus`）に `cluster.sql` を流すと、エラーは `role "nexus" already exists` の1件だけで、`restore-fingerprint-post-c.sql` の出力（61行）は元と**完全に一致**した。最初の比較では `studio."__EFMigrationsHistory"` の ACL が元は明示的な所有者権限、復元先は NULL（既定）と表記だけ違ったため、実効 ACL（`acldefault` で補う）で比べる形にした。

@@ -1,0 +1,6 @@
+rehearsal 2026-11-16 (JST), colima nexus-db-verify, disposable PG17.11 postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+source DB built with ../2026-11-15/rehearsal/rehearse-db.sh (B1-C6), plus one public.spots row
+diff fp-source.txt fp-restore.txt: empty
+2c9ec6ff212e4d19502d7d8aa63a2e62003581efebbc40b731d8c196b4ec101f  globals.sql
+947e60bb482e04eb91c033f36f4856a19c404ec9a67e3699b1f6ca74b14e8d33  cluster.sql
+75eef3109326198eda363abfa8c220e9dc2e02076317fad899e41d97aad60c84  nexus.dump
