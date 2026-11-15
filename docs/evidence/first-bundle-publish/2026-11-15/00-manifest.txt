@@ -1,0 +1,12 @@
+rehearsal: 2026-11-15, colima nexus-db-verify (linux/arm64), disposable; no production contact
+nexus-studio 165d4687d5b8a02b78fe5d470a309592a2c16022 (origin/develop; studio-api identical to 70994f0, the source of the production Studio SQL)
+nexus-mobile f42d9da (production public-api source) f42d9dad6c1ef1d87af8b15808bb44f9c6ff4b34
+nexus-mobile iOS app: origin/develop 43a2dbdb12208c6a9c1e1d0872ebcfc0dfd9dcb9
+nexus-infra 135007edfe7a376ffe0d9cbae62bc14a97905a16 (origin/main)
+postgres image postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (server_version 17.11)
+studio-api image sha256:5507afe8b1161ffa5e375e1c74170d540753ef1e1ec6b167797186a3eda9bf0f (local arm64 build; same ID when rebuilt from git archive 165d468)
+studio-web image sha256:eeecbd0d04b4a2b2ffb06ce3f00d425cd3c0a7200e4ad5c3b4022a6c4a81c0d1 (local arm64 build)
+public-api image sha256:2d9a618655db12ed00002170099283eae5f0fc32f5efc7b5f625d4d0bd496efb (local arm64 build of f42d9da apps/public-api/Dockerfile)
+caddy caddy@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52 (v2.11.4 arm64; the adopted amd64 digest 040e9f74... crashed under emulation, see caddy-amd64-emulation-crash-head.txt)
+studio-migrate.sql c6df200b5aa7e3338bc7c558c88ca51d24230747caf59e83ec8f058d2a037533 (NexusStudio CI run 43469460316 artifact, same file as production C3)
+mobile-migrate.sql 7cf58c307611ebec07e617add3f18d7fa65eee30c6de16dc2d989d5e4a9da763 (tools/database script, .NET 8 SDK container)

@@ -53,6 +53,8 @@ jobs:
           export PG17_BASELINE_PROJECT=nexus-pg17-baseline-ci PG17_BASELINE_VOLUME=nexus-pg17-baseline-ci-db PG17_BASELINE_IMAGE="example/postgres17@sha256:$review_digest" PG17_BASELINE_PASSWORD_FILE=/private/disposable-secrets/baseline_password PG17_BASELINE_SECRET_DIR=/private/disposable-secrets
           python3 scripts/pg17-baseline.py preflight
           docker compose -f compose.pg17-baseline.yml config --quiet
+          export STUDIO_ONEOFF_PROJECT=nexus-studio-oneoff-ci STUDIO_ONEOFF_API_IMAGE="example/studio-api@sha256:$review_digest" STUDIO_ONEOFF_WEB_IMAGE="example/studio-web@sha256:$review_digest" STUDIO_ONEOFF_CADDY_IMAGE="example/caddy@sha256:$review_digest" STUDIO_ONEOFF_SUBNET=172.30.251.0/28 STUDIO_ONEOFF_PORT=18443 STUDIO_ONEOFF_BACKEND_NETWORK=reviewed-pg17-network STUDIO_ONEOFF_SECRET_DIR=/private/oneoff-secrets
+          docker compose -f compose.studio-oneoff-publish.yml config --quiet
       - run: python3 -m pip install PyYAML==6.0.3
       - name: Validate PG17 edge and reject PG18 composition
         shell: bash

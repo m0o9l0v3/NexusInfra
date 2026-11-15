@@ -1,0 +1,94 @@
+== SHA256SUMS (inputs)
+0ec65dce204f27fd01db974cc9508f2e36594cfe1708b0c84af0aca80fd4d65b  01-roles.sql
+b71231e47693c3957a04b48fe339fbf769778789fa6fd02068edbe8b3cd65b93  02-delivery-schema.sql
+f7d516a8ac9488bfa0c3dc1d674b836d54363cff966e3376ae14faceadc590a2  03-grant-delivery.sql
+456bbf9836b5fede04fa0d914beaca743456ee84452c63db13479667c8e9c134  grant-runtime.sql
+d662f59548e90615d16b416a208ce8b5813eeb529960cad75fd4b1ef3050ce4a  grant-studio-runtime.sql
+7cf58c307611ebec07e617add3f18d7fa65eee30c6de16dc2d989d5e4a9da763  mobile-migrate.sql
+2f463107d5a1b052a2ba97e175e562388d8a6367413a4e1020f2ba277c453ec7  monitor-delivery-size.sql
+c6df200b5aa7e3338bc7c558c88ca51d24230747caf59e83ec8f058d2a037533  studio-migrate.sql
+951f09c85e58df6d8e013451044b6ef8b747c1041ea618b275799fb39afbf62f  studio-pg17/setup-studio-roles.sh
+769fd80e26624598d7e5f42b2db674175ac7cf4a9ba731f94d4eeb1490b4a53f  studio-pg17/setup-studio-roles.sql
+== P2 (version / system_identifier redacted)
+nexus|nexus|17.11|scram-sha-256
+== B1 01-roles.sql
+BEGIN
+DO
+CREATE ROLE
+CREATE ROLE
+CREATE ROLE
+ALTER DATABASE
+REVOKE
+GRANT
+ALTER SCHEMA
+REVOKE
+GRANT
+COMMIT
+== B2 mobile-migrate.sql
+ pg_advisory_lock 
+------------------
+ 
+(1 row)
+
+ pg_advisory_unlock 
+--------------------
+ t
+(1 row)
+
+== B3 grant-runtime.sql
+NOTICE:  policy "nexus_public_visible" for relation "spots" does not exist, skipping
+NOTICE:  policy "nexus_admin_all" for relation "spots" does not exist, skipping
+NOTICE:  policy "nexus_public_visible" for relation "events" does not exist, skipping
+NOTICE:  policy "nexus_admin_all" for relation "events" does not exist, skipping
+== B4
+roles|nexus,nexus_admin_app,nexus_owner,nexus_public
+db_owner|nexus_owner
+public_acl_on_db|0
+history|20260905120000_AddMapDatasets,20260919120000_AddInitialPostgreSqlSchema
+public_tables|14
+SET
+readiness_unfit|f
+RESET
+== C1 setup-studio-roles.sh (temporary client container on the DB network)
+BEGIN
+SET
+DO
+CREATE ROLE
+CREATE ROLE
+GRANT
+CREATE SCHEMA
+REVOKE
+GRANT
+DO
+COMMIT
+== C2 02-delivery-schema.sql
+BEGIN
+SET
+SET
+DO
+CREATE SCHEMA
+REVOKE
+GRANT
+COMMIT
+== C3 studio-migrate.sql (as nexus_studio_migrator)
+== C4 grant-studio-runtime.sql
+== C5 03-grant-delivery.sql
+BEGIN
+SET
+DO
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+GRANT
+COMMIT
+== C6
+studio_roles|nexus_studio_app:false,nexus_studio_migrator:false
+schemas|delivery:nexus_studio_migrator,studio:nexus_studio_migrator
+studio_history|16|20261112071332_RemoveCampusGroundEntityKind
+delivery_tables|current_bundle:nexus_studio_migrator,participant_bundles:nexus_studio_migrator
+public_cannot_use_studio|t
+app_cannot_write_history|t
+delivery_rows|0
+DB_READY nexus-fbp-20261115-pg17 on nexus-fbp-20261115-backend (alias pg17-db)
