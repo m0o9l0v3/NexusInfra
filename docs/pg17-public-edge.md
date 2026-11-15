@@ -156,12 +156,12 @@ df -h /var/lib/docker
 | 4GB VPSのメモリ余裕（追加コンテナ分） | | | | |
 
 > コードから確認済み（2026-10-18、NexusMobile `develop` `6459abd`。VPSの値ではない）:
-> - CORS: `Cors:AllowedOrigins`のoriginだけ許可（任意header/method、credentialsなし）。iOSアプリはCORS不要のため、許可すべきブラウザoriginを決めて設定する。
-> - **DEC-3決定（2026-10-18）:** [案A](pg17-edge-decisions.md)を採用。初期の`Cors__AllowedOrigins__0`は`https://${PG17_EDGE_API_DOMAIN}`とし、別originのLPは許可しない。[NexusMobile #81](https://github.com/m0o9l0v3/NexusMobile/issues/81)には当日イベント一覧のAPI利用方針があるため、LPがAPIを使わないとは扱わない。LPのHTTPS originと接続構成を確認し、別originからの直接接続開始前に案Bを再判断する。LP同時公開が必要なら、この再判断も公開前に終える。現行ポリシーは任意methodを許可するため、その範囲も再確認する。Compose・validator・拒否テストはローカル実装済み。採用digestによるブラウザ検証・本番適用は未実施（2026-10-20追記: ブラウザ検証は[隔離検証](pg17-issue-7-digest-verification.md)で実施済み。本番適用は未実施）。
 > - rate limit: クライアントIP単位のFixed Window。`POST /api/logs` 60回/60秒、`/api/logs/batch` 12回/60秒。GET系と`/health`は制限なし。
 > - **プロキシ越しのクライアントIP:** `X-Forwarded-For`は`RateLimiting:KnownNetworks`/`KnownProxies`のproxyからだけ信頼する（未設定ならloopbackのみ、`ForwardLimit=1`）。Caddy経由では`RateLimiting__KnownNetworks__0`にedge subnetを渡さないと、全クライアントがCaddyのIPで1つの枠を共有する。NexusMobileの`deploy/database/compose.production.yml`はこれを必須にしているが、PG18の`compose.yaml`とIssue #6 T1の構成には無い → #6で`PG17_EDGE_SUBNET`を渡すこと。
 > - **DEC-1決定（2026-10-18）:** [案A](pg17-edge-decisions.md#dec-1-caddy越しのクライアントipとrate-limit)を採用。初期edgeの参加はCaddyとpublic-apiのみとし、validatorで設定値とedge subnetの一致・サービス集合・接続networkを検査する。subnet全体を信頼するため、Studio等を追加する前に案Bまたはnetwork分離を含めて再判断する。運用時の実参加コンテナ確認と、採用Caddy版・digestによるクライアント別の制限枠・429・偽装ヘッダーの隔離検証が必要。Compose・validator・拒否テストはローカル実装済み。採用digestによるAPI隔離検証・本番適用は未実施（2026-10-20追記: API隔離検証は[隔離検証](pg17-issue-7-digest-verification.md)で実施済み。運用時の実参加コンテナ確認・本番適用は未実施）。
 > - ログ: Serilogをstdoutへ（`Microsoft`はWarning以上）。request logはmethod・path・status・時間で、クライアントIP・本文は既定で含まない。DB永続化失敗時は例外を`LogError`で出す（DBエラー本文が載り得る）。Caddyはglobal `log`のみでsite単位のaccess logを設定していないため、アクセスIPは記録しない。保持はjson-file `10m×3`。
+
+公開サイト追加時のCORSは[DEC-3の改訂案（案B）](pg17-edge-decisions.md#dec-3-cors許可origin)に従う。`https://www.nexus-app.jp`からの`GET /health`だけを許可する。iOSアプリからの通信はCORSの対象外。
 
 ## 7. PG17バックアップ・復元検証・既存timer
 
@@ -197,7 +197,7 @@ Internet → Caddy（host TCP 80/443のみ）→ public-api:8080 → 既存PG17�
 | ファイル | 役割 |
 | --- | --- |
 | `compose.pg17-edge.yaml` | 単独実行する固定project `nexus-edge-pg17` |
-| `Caddyfile.pg17-api` | APIだけを転送。HSTSはmax-ageのみ、trusted_proxiesや転送ヘッダーの独自上書きなし |
+| `Caddyfile.pg17-api` | APIを転送し、別ホストで公開サイトを静的配信。既存のセキュリティヘッダーを両方に適用 |
 | `.env.pg17-edge.example` | 全実値が空欄の専用テンプレート |
 | `scripts/validate-pg17-edge.py` | raw YAML・展開JSON・envの安全検査。Docker/DB操作なし |
 | `tests/test_validate_pg17_edge.py` | subnet/CORS不一致・PG18合成・危険なサービス等の拒否検証 |
@@ -205,9 +205,10 @@ Internet → Caddy（host TCP 80/443のみ）→ public-api:8080 → 既存PG17�
 
 | env | 確定する内容 |
 | --- | --- |
-| `PG17_EDGE_PUBLIC_API_IMAGE` | GHCRのレビュー済みpublic-api digest（DEC-2、発行はMobile別変更） |
+| `PG17_EDGE_PUBLIC_API_IMAGE` | NexusMobile `31c2fb0` のCORS変更を含む、レビュー済みpublic-apiのGHCR digest |
 | `PG17_EDGE_CADDY_IMAGE` | 対象platformに対応する公式Caddyのindex digest |
-| `PG17_EDGE_API_DOMAIN` | APIのDNS名。初期CORSもこのHTTPS origin（DEC-3） |
+| `PG17_EDGE_API_DOMAIN` | APIのDNS名 |
+| `PG17_EDGE_SITE_DOMAIN` | 公開サイトのDNS名。本番は `www.nexus-app.jp`。CORSもこのHTTPS origin（DEC-3） |
 | `PG17_EDGE_ACME_EMAIL` | 私有メモに保管する証明書連絡先 |
 | `PG17_EDGE_BACKEND_NETWORK` | 読み取り確認で特定した既存PG17のnetwork実名 |
 | `PG17_EDGE_SUBNET` | 既存network/経路と重複しないprivate IPv4 /24〜/28。KnownNetworksにも同じ値（DEC-1） |
@@ -227,7 +228,7 @@ validatorは初期構成の閉じた契約を検査する。追加のサービ�
 
 以下は手順であり、今回の実装作業ではVPS上で実行しない。§1〜7のGo/No-Go、PG17のバックアップ・VPS外コピー・別volume復元、schema/role契約B、GHCR発行証跡、VPS platform、80/443の衝突なし・DNS・ACME・SSH 22維持を確認する。未確認値を推測して埋めない。
 
-1. 専用ディレクトリへレビュー済みファイルを配置し、私有envと秘密を準備する。API/Caddyの両参照は`@sha256:`。直前のPG17 container ID/image/mount/volumeと、新projectの前digest・env版を私有メモへ保存する。
+1. 専用ディレクトリへレビュー済みファイルを配置し、私有envと秘密を準備する。API/Caddyの両参照は`@sha256:`。直前のPG17 container ID/image/mount/volumeと、新projectの前digest・env版を私有メモへ保存する。公開サイトは以下の手順で準備する。
 2. rootの信頼できるシェルで私有envを読み、安全検査を実行する。展開JSONには機微な運用情報があるため一時私有ファイルにだけ保存し、全文をCI・Issue・チャットへ貼らない。
 
 ```sh
@@ -250,9 +251,24 @@ docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml pull
 docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml up -d --wait
 ```
 
-4. 外部HTTPSの`/health`と代表GET、HTTP→HTTPS、セキュリティヘッダー、ログの機微情報、TCP 80/443以外のhost非公開を確認する。edgeの実参加コンテナが2つだけ、Caddyがbackend不参加であることを私有メモで確認する。PG17 container ID/image/mount/volumeが直前と一致することを確認する。iOSでのAPI疎通とログ送信、ディスク・メモリ・証明書期限の監視を確認する。LPの別origin利用はまだ許可しない。
+4. 外部HTTPSの`/health`と代表GET、HTTP→HTTPS、セキュリティヘッダー、ログの機微情報、TCP 80/443以外のhost非公開を確認する。edgeの実参加コンテナが2つだけ、Caddyがbackend不参加であることを私有メモで確認する。PG17 container ID/image/mount/volumeが直前と一致することを確認する。iOSでのAPI疎通とログ送信、ディスク・メモリ・証明書期限の監視を確認する。公開サイトの確認も行う。
 
 途中失敗なら後続へ進まず、新projectのrollbackを判断する。PG17に対する停止・再作成・volume操作で解決しない。
+
+### 公開サイトの配置と確認
+
+1. レビュー済みのNexusMobileコミットを使い、リポジトリのルートでビルドする。
+
+   ```sh
+   npm ci
+   npm run typecheck --workspace web
+   VITE_API_BASE_URL=https://api.nexus-app.jp npm run build --workspace web
+   ```
+
+2. `web/dist/` の中身だけをVPSの `/srv/nexus-web/releases/<リリースID>/` に置く。4ページのHTML、参照先のアセット、承認済みの画像だけが含まれることを確認する。`current` には `releases/<リリースID>` への相対リンクを使う。更新時は同じ親ディレクトリに一時リンクを作り、Linuxの `mv -T` で `current` へ置き換える。Caddyは親ディレクトリを読み取り専用でマウントするため、コンテナ再起動なしで切り替わる。前回のディレクトリを残し、表示の問題があれば同じ手順でリンクを戻す。
+3. `www.nexus-app.jp` を同じVPSに向ける。Aレコードを設定し、VPSがIPv6でも80/443へ到達できる場合はAAAAも設定する。証明書を先行取得したCaddyが80/443を使用中の場合は、既存の切り替え手順と証明書volumeを確認してから同じポートを引き継ぐ。
+4. HTTPSの4ページ、`/development`の末尾スラッシュへの転送、`/?code=TEST`、HTTP→HTTPS、スマホとPCのライト・ダーク表示を確認する。HTMLに `no-cache`、存在するハッシュ付きアセットに `immutable` が付くことも確認する。
+5. `GET /health`に公開サイトのOriginを送ると `Access-Control-Allow-Origin: https://www.nexus-app.jp` が返ることを確認する。未許可originの同じGETと、公開サイトoriginでの他のAPIへのGETにはAllow-Originが付かないことを確認する。最後にブラウザで「応答あり」を確認する。
 
 ## 11. Rollback
 
@@ -290,7 +306,7 @@ docker compose -p "$PG17_EDGE_ISO_PROJECT" -f compose.pg17-edge-isolation.yml ex
 
 ダミーの公開・非公開行と管理表の行をレビューしたfixtureとして入れ、[baseline §4](pg17-baseline.md#4-issue-7-の受け入れ条件正式契約b)の権限チェックを行う。投入fixtureと期待結果も#7の証跡に含める。
 
-4. edge用私有設定を隔離環境専用に用意する。`PG17_EDGE_BACKEND_NETWORK`は上の`PG17_EDGE_ISO_NETWORK`、接続文字列は`Host=pg17-isolation-db;Database=nexus;Username=nexus_public`とダミーパスワード、APIドメインは`api.localhost`。audit keyもダミーにする。採用APIの実UIDをinspectし、そのUID所有0400の秘密ファイルを作る。Caddyはlocalhost向け内部CAを使うため、root証明書をMac全体へ信頼登録する必要はない。
+4. edge用私有設定を隔離環境専用に用意する。`PG17_EDGE_BACKEND_NETWORK`は上の`PG17_EDGE_ISO_NETWORK`、接続文字列は`Host=pg17-isolation-db;Database=nexus;Username=nexus_public`とダミーパスワード、APIドメインは`api.localhost`、公開サイトドメインは`www.localhost`。隔離engineが参照できる`/srv/nexus-web`に確認用のビルドを用意する。audit keyもダミーにする。採用APIの実UIDをinspectし、そのUID所有0400の秘密ファイルを作る。Caddyはlocalhost向け内部CAを使うため、root証明書をMac全体へ信頼登録する必要はない。
 5. §10と同じraw・resolved・env検査後、隔離engineでのみedgeを起動する。`curl -k --resolve api.localhost:443:127.0.0.1 https://api.localhost/health`と代表GETを確認する（`-k`はこの隔離確認専用）。ログPOST・hash連鎖・再接続を含めてbaseline §4の全項目を記録する。
 6. クライアント別rate limitは、Caddyから見て異なる接続元IPになる2つのテストクライアントで確認する。クライアントをedgeには参加させず、隔離engineのpublic側へ接続する。一方の429が他方へ波及しないこと、偽装X-Forwarded-For/ProtoでIP・schemeや制限枠を変更できないことを確認する。共有NAT配下の同じIPは別クライアントとみなさない。CORSは未許可originにAllow-Originが付かないことをブラウザでも確認する。CORSをAPI認証やログ送信全般の防止策とは扱わない。
 7. 終了時はedgeを先に停止・削除し、backendへの参加がなくなってから隔離DB projectを片付ける。`down -v`は使わない。volumeは残し、不要と確認した今回の隔離volumeだけを個別に削除する。本番名・別作業のvolumeは対象外。
@@ -306,4 +322,4 @@ docker volume rm "$PG17_EDGE_ISO_VOLUME"
 
 PG18 `compose.yaml`との合成起動、`nexus_postgres_data`のマウント、既存PG17の停止・再作成・接続先変更、`down -v`・volume prune、backup/migratorやtimerの混入、タグによる本番起動は禁止。PG18側のrate limit問題は別Issueとし、今回の変更禁止ファイルを直さない。
 
-Studioは[Issue #8](https://github.com/m0o9l0v3/NexusInfra/issues/8)のPG17 DB/auth準備と[Issue #9](https://github.com/m0o9l0v3/NexusInfra/issues/9)の結合検証まで非公開。同じCaddyへの追加前にDEC-1の信頼範囲を再判断する。LPの別origin接続前にはDEC-3を再判断する。HSTS `includeSubDomains`は関連サブドメインのHTTPS運用確認後に別途判断する。
+Studioは[Issue #8](https://github.com/m0o9l0v3/NexusInfra/issues/8)のPG17 DB/auth準備と[Issue #9](https://github.com/m0o9l0v3/NexusInfra/issues/9)の結合検証まで非公開。同じCaddyへの追加前にDEC-1の信頼範囲を再判断する。HSTS `includeSubDomains`は関連サブドメインのHTTPS運用確認後に別途判断する。

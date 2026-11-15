@@ -19,6 +19,7 @@ DIGEST = "example/image@sha256:" + "0" * 64
 ENV = {
     "PG17_EDGE_PUBLIC_API_IMAGE": DIGEST, "PG17_EDGE_CADDY_IMAGE": DIGEST,
     "PG17_EDGE_SUBNET": "172.30.251.0/28", "PG17_EDGE_API_DOMAIN": "api.example.invalid",
+    "PG17_EDGE_SITE_DOMAIN": "www.example.invalid",
     "PG17_EDGE_ACME_EMAIL": "ops@example.invalid", "PG17_EDGE_BACKEND_NETWORK": "reviewed-pg17-network",
     "PG17_EDGE_SECRET_DIR": "/private/disposable-secrets",
     "PG17_EDGE_ISO_PROJECT": "nexus-pg17-edge-iso-ci",
@@ -98,8 +99,7 @@ def test_mount_identity():
         other.write_text(CADDY + "\n{$STUDIO_DOMAIN} { reverse_proxy studio-api:8080 }\n")
         compose = folder / "compose.yml"
         def invoke(source, inspected, accept):
-            data = changed(["services", "caddy", "volumes"], [
-                source + ":/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"])
+            data = changed(["services", "caddy", "volumes", 0], source + ":/etc/caddy/Caddyfile:ro")
             compose.write_text(yaml.safe_dump(data))
             result = subprocess.run([sys.executable, str(SCRIPT), "--compose", str(compose),
                                      "--caddyfile", str(inspected)], capture_output=True, text=True)
@@ -160,9 +160,12 @@ def main():
         (["services", "caddy", "ports"], ["80:80", "443:443", "5432:5432"]),
         (["services", "caddy", "networks"], ["edge", "public", "backend"]),
         (["services", "caddy", "volumes"], ["nexus_postgres_data:/var/lib/postgresql/data"]),
-        (["services", "caddy", "volumes"], ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]),
-        (["services", "caddy", "volumes"], ["/private/tmp/other/Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]),
-        (["services", "caddy", "volumes"], ["./Caddyfile.pg17-api:/etc/caddy/Caddyfile", "caddy_data:/data", "caddy_config:/config"]),
+        (["services", "caddy", "volumes", 0], "./Caddyfile:/etc/caddy/Caddyfile:ro"),
+        (["services", "caddy", "volumes", 0], "/private/tmp/other/Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro"),
+        (["services", "caddy", "volumes", 0], "./Caddyfile.pg17-api:/etc/caddy/Caddyfile"),
+        (["services", "caddy", "volumes", 1, "source"], "/srv/nexus-web/current"),
+        (["services", "caddy", "volumes", 1, "read_only"], False),
+        (["services", "caddy", "volumes", 1, "bind", "create_host_path"], True),
         (["networks", "backend", "external"], False),
         (["networks", "edge", "internal"], False),
         (["networks", "edge", "name"], "shared-edge"),
@@ -180,12 +183,17 @@ def main():
     for path, value in [
         (["services", "public-api", "environment", "RateLimiting__KnownNetworks__0"], "172.30.250.0/28"),
         (["services", "public-api", "environment", "Cors__AllowedOrigins__0"], "https://lp.example.invalid"),
+        (["services", "public-api", "environment", "Cors__AllowedOrigins__0"], "https://api.example.invalid"),
+        (["services", "caddy", "environment", "SITE_DOMAIN"], "https://www.example.invalid"),
         (["networks", "edge", "ipam", "config"], [{"subnet": "8.8.8.0/28"}]),
         (["networks", "backend", "name"], "nexus-production_db"),
         (["services", "caddy", "image"], "caddy:2"),
-        (["services", "caddy", "volumes"], ["/private/tmp/other/Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]),
+        (["services", "caddy", "volumes", 0], "/private/tmp/other/Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro"),
     ]:
         run(resolved=changed(path, value, resolved))
+    same_domain = changed(["services", "caddy", "environment", "SITE_DOMAIN"], "API.example.invalid", resolved)
+    same_domain["services"]["public-api"]["environment"]["Cors__AllowedOrigins__0"] = "https://API.example.invalid"
+    run(resolved=same_domain, error="site and API domains must differ")
     for key, value in [
         ("PG17_EDGE_PUBLIC_API_IMAGE", "public:latest"), ("PG17_EDGE_CADDY_IMAGE", "caddy:2"),
         ("PG17_EDGE_SUBNET", "8.8.8.0/28"), ("PG17_EDGE_SUBNET", "10.0.0.0/16"),
@@ -193,12 +201,14 @@ def main():
         ("PG17_EDGE_SECRET_DIR", "relative"), ("PG17_EDGE_BACKEND_NETWORK", "nexus-production_db"),
         ("PG17_EDGE_API_DOMAIN", "127.0.0.1"), ("PG17_EDGE_API_DOMAIN", "api.example.invalid/path"),
         ("PG17_EDGE_API_DOMAIN", "*.example.invalid"), ("PG17_EDGE_ACME_EMAIL", ""),
+        ("PG17_EDGE_SITE_DOMAIN", ""), ("PG17_EDGE_SITE_DOMAIN", "API.example.invalid"),
     ]:
         run(env={key: value})
     for extra in ("\n{$STUDIO_DOMAIN} { reverse_proxy studio-api:8080 }", "\nimport /private/override"):
         run(caddy=CADDY + extra)
     run(caddy=CADDY.replace("reverse_proxy public-api:8080", "reverse_proxy public-api:8080 { trusted_proxies private_ranges }"))
     run(caddy=CADDY.replace("max-age=31536000", "max-age=31536000; includeSubDomains"))
+    run(caddy=CADDY.replace("file_server", "file_server browse"))
     run(caddy=CADDY.replace('"DENY"', '"D E N Y"'))
     run(caddy=CADDY.replace('"DENY"', '"DE\nNY"'))
     run(caddy=CADDY.replace('"DENY"', '"DENY#invalid"'))

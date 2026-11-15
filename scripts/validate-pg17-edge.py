@@ -16,7 +16,12 @@ PROJECT = "nexus-edge-pg17"
 ISO_PREFIX = "nexus-pg17-edge-iso-"
 DIGEST = r"[^\s]+@sha256:[0-9a-f]{64}"
 PRIVATE = [ipaddress.ip_network(s) for s in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
-# Deliberately a closed API-only Caddy contract: header rewrites/trusted_proxies/imports
+SITE_ROOT = "/srv/nexus-web"
+SITE_MOUNT = {
+    "type": "bind", "source": SITE_ROOT, "target": SITE_ROOT, "read_only": True,
+    "bind": {"create_host_path": False},
+}
+# Deliberately a closed Caddy contract: header rewrites/trusted_proxies/imports
 # can invalidate DEC-1 even when reverse_proxy is still present.
 CADDY_CONTRACT = '''
 { email {$ACME_EMAIL} log { output stdout format json } }
@@ -27,6 +32,14 @@ Referrer-Policy "strict-origin-when-cross-origin"
 X-Frame-Options "DENY" -Server
 } }
 {$API_DOMAIN} { import headers encode zstd gzip reverse_proxy public-api:8080 }
+{$SITE_DOMAIN} {
+import headers encode zstd gzip root * /srv/nexus-web/current
+@assets { path /assets/* file }
+header @assets Cache-Control "public, max-age=31536000, immutable"
+@html path / /development/ /status/ /tech/ *.html
+header @html Cache-Control "no-cache"
+file_server
+}
 '''
 
 
@@ -161,8 +174,10 @@ def validate(data, resolved=False, isolation=False, *, compose_dir=ROOT, caddyfi
     check(caddy.get("depends_on", {}).get("public-api", {}).get("condition") == "service_healthy"
           and set(caddy.get("depends_on", {})) == {"public-api"}, "caddy must depend only on healthy public-api")
     mounts = mounts_of(caddy)
-    check(len(mounts) == 3 and {m[1] for m in mounts} == {"/etc/caddy/Caddyfile", "/data", "/config"},
-          "caddy mounts must be exactly the API config and two ACME volumes")
+    check(len(mounts) == 4 and {m[1] for m in mounts} == {"/etc/caddy/Caddyfile", SITE_ROOT, "/data", "/config"},
+          "caddy mounts must be exactly the config, static site and two ACME volumes")
+    check(SITE_MOUNT in caddy.get("volumes", []),
+          "static site must use the read-only parent bind mount without creating the source")
     for source, target, read_only in mounts:
         if target == "/etc/caddy/Caddyfile":
             source_path = Path(source)
@@ -171,7 +186,7 @@ def validate(data, resolved=False, isolation=False, *, compose_dir=ROOT, caddyfi
                 source_path = compose_dir / source_path
             check(source_path.name == "Caddyfile.pg17-api" and read_only and same_file(source_path, caddyfile),
                   "Caddyfile mount must be the exact file validated, mounted read-only")
-        else:
+        elif target != SITE_ROOT:
             check(source == {"/data": "caddy_data", "/config": "caddy_config"}.get(target) and not read_only,
                   "ACME mount source must be project-scoped")
     volumes = data.get("volumes", {})
@@ -213,11 +228,14 @@ def validate(data, resolved=False, isolation=False, *, compose_dir=ROOT, caddyfi
     check(all(env.get(k) == v for k, v in expected.items()), "public-api runtime/secret configuration differs")
     check(env.get("RateLimiting__KnownNetworks__0") == subnet, "KnownNetworks must equal the edge subnet (DEC-1)")
     caddy_env = environment_of(caddy)
-    check(set(caddy_env) == {"API_DOMAIN", "ACME_EMAIL"}, "caddy environment keys differ")
+    check(set(caddy_env) == {"API_DOMAIN", "SITE_DOMAIN", "ACME_EMAIL"}, "caddy environment keys differ")
     api_domain = caddy_env.get("API_DOMAIN", "")
+    site_domain = caddy_env.get("SITE_DOMAIN", "")
     origin = env.get("Cors__AllowedOrigins__0", "")
-    check(origin == "https://" + api_domain, "CORS must equal the API HTTPS origin (DEC-3)")
     check(domain(api_domain) if resolved else variable(api_domain, "PG17_EDGE_API_DOMAIN"), "API domain is invalid")
+    check(domain(site_domain) if resolved else variable(site_domain, "PG17_EDGE_SITE_DOMAIN"), "site domain is invalid")
+    check(site_domain.lower() != api_domain.lower(), "site and API domains must differ")
+    check(origin == "https://" + site_domain, "CORS must equal the public site HTTPS origin (DEC-3)")
     email = caddy_env.get("ACME_EMAIL", "")
     check(bool(email) and "@" in email if resolved else variable(email, "PG17_EDGE_ACME_EMAIL"), "ACME contact is required")
     check(secrets_of(api) == {"public_connection", "audit_key"}, "public-api secret set differs")
@@ -288,8 +306,12 @@ def validate_environment(isolation=False):
         paths = ("PG17_EDGE_SECRET_DIR",)
         if not private_subnet(os.environ.get("PG17_EDGE_SUBNET", "")):
             errors.append("PG17_EDGE_SUBNET must be private IPv4 /24 to /28")
-        if not domain(os.environ.get("PG17_EDGE_API_DOMAIN", "")):
+        api_domain = os.environ.get("PG17_EDGE_API_DOMAIN", "")
+        site_domain = os.environ.get("PG17_EDGE_SITE_DOMAIN", "")
+        if not domain(api_domain):
             errors.append("PG17_EDGE_API_DOMAIN must be a DNS name, not an IP or URL")
+        if not domain(site_domain) or site_domain.lower() == api_domain.lower():
+            errors.append("PG17_EDGE_SITE_DOMAIN must be a DNS name distinct from the API domain")
         if not re.fullmatch(r"[^\s@]+@[^\s@]+", os.environ.get("PG17_EDGE_ACME_EMAIL", "")):
             errors.append("PG17_EDGE_ACME_EMAIL is required")
         backend = os.environ.get("PG17_EDGE_BACKEND_NETWORK", "")
@@ -326,7 +348,7 @@ def main():
     if not args.isolation:
         try:
             if caddy_tokens(args.caddyfile.read_text()) != caddy_tokens(CADDY_CONTRACT):
-                errors.append("Caddyfile must match the API-only forwarding/header/TLS contract")
+                errors.append("Caddyfile must match the API forwarding and static site contract")
         except ValueError:
             errors.append("Caddyfile contains an invalid quoted literal")
         except OSError:
