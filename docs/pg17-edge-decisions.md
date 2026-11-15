@@ -205,6 +205,21 @@ NexusMobile PR #98でPrivate用発行先への発行が成功した後、Issue #
 
 ## DEC-3: CORS許可origin
 
+### 2026-11-15 公開サイト追加に伴う改訂案（案B）
+
+[NexusMobile #131](https://github.com/m0o9l0v3/NexusMobile/issues/131)で、公開サイトは
+`https://www.nexus-app.jp`、ブラウザから直接呼ぶAPIは
+`GET https://api.nexus-app.jp/health` に決まった。[NexusMobile #72](https://github.com/m0o9l0v3/NexusMobile/issues/72)の実装
+（`31c2fb0`）は、このエンドポイントだけにGET用のCORSポリシーを適用する。
+
+公開サイトを含むPG17 edgeでは、`PG17_EDGE_SITE_DOMAIN=www.nexus-app.jp`から
+`Cors__AllowedOrigins__0=https://www.nexus-app.jp`を作る。Caddyの配信ホストにも
+同じ変数を使う。案Aは2026-10-18時点の判断として以下に残す。
+本番では、変更を含むpublic-apiイメージをdigestで固定し、許可originの
+`GET /health`だけにAllow-Originが付くことを隔離環境で確認してから適用する。
+10月の[Issue #7](https://github.com/m0o9l0v3/NexusInfra/issues/7)で検証した旧digestは、
+今回のCORS確認には使えない。
+
 ### 問い
 
 `Cors__AllowedOrigins__*`にどのoriginを設定するか。Issue #6 T1の`https://${PG17_EDGE_API_DOMAIN}`（API自身のorigin）のままでよいか。

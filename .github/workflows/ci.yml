@@ -59,7 +59,7 @@ jobs:
         run: |
           review_digest=$(printf '%064d' 0)
           export PG17_EDGE_PUBLIC_API_IMAGE="example/public@sha256:$review_digest" PG17_EDGE_CADDY_IMAGE="example/caddy@sha256:$review_digest"
-          export PG17_EDGE_API_DOMAIN=api.example.invalid PG17_EDGE_ACME_EMAIL=ops@example.invalid PG17_EDGE_BACKEND_NETWORK=reviewed-pg17-network PG17_EDGE_SUBNET=172.30.251.0/28 PG17_EDGE_SECRET_DIR=/private/disposable-secrets
+          export PG17_EDGE_API_DOMAIN=api.example.invalid PG17_EDGE_SITE_DOMAIN=www.example.invalid PG17_EDGE_ACME_EMAIL=ops@example.invalid PG17_EDGE_BACKEND_NETWORK=reviewed-pg17-network PG17_EDGE_SUBNET=172.30.251.0/28 PG17_EDGE_SECRET_DIR=/private/disposable-secrets
           python3 scripts/validate-pg17-edge.py --env
           docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml config --quiet
           docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml config --format json > "$RUNNER_TEMP/edge.json"
@@ -82,4 +82,4 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker run --rm -v "$PWD:/src" -w /src -e API_DOMAIN=api.example.invalid -e STUDIO_DOMAIN=studio.example.invalid -e ACME_EMAIL=ops@example.invalid caddy:2 caddy validate --config Caddyfile --adapter caddyfile
-      - run: docker run --rm -v "$PWD:/src" -w /src -e API_DOMAIN=api.example.invalid -e ACME_EMAIL=ops@example.invalid caddy:2 caddy validate --config Caddyfile.pg17-api --adapter caddyfile
+      - run: docker run --rm -v "$PWD:/src" -w /src -e API_DOMAIN=api.example.invalid -e SITE_DOMAIN=www.example.invalid -e ACME_EMAIL=ops@example.invalid caddy:2 caddy validate --config Caddyfile.pg17-api --adapter caddyfile

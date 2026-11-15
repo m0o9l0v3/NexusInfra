@@ -1,4 +1,4 @@
-# Standalone API edge; never combine with compose.yaml. No database lifecycle is owned here.
+# Standalone PG17 edge; never combine with compose.yaml. No database lifecycle is owned here.
 name: nexus-edge-pg17
 services:
   public-api:
@@ -10,7 +10,7 @@ services:
       ConnectionStrings__PublicApiReadOnlyFile: /run/secrets/public_connection
       AuditLog__HashKeyFile: /run/secrets/audit_key
       RateLimiting__KnownNetworks__0: ${PG17_EDGE_SUBNET:?set the reviewed edge subnet}
-      Cors__AllowedOrigins__0: https://${PG17_EDGE_API_DOMAIN:?set the API domain}
+      Cors__AllowedOrigins__0: https://${PG17_EDGE_SITE_DOMAIN:?set the public site domain}
     secrets: [public_connection, audit_key]
     networks: [backend, edge]
     healthcheck:
@@ -27,9 +27,16 @@ services:
     ports: ["80:80", "443:443"]
     environment:
       API_DOMAIN: ${PG17_EDGE_API_DOMAIN:?set the API domain}
+      SITE_DOMAIN: ${PG17_EDGE_SITE_DOMAIN:?set the public site domain}
       ACME_EMAIL: ${PG17_EDGE_ACME_EMAIL:?set the ACME contact}
     volumes:
       - ./Caddyfile.pg17-api:/etc/caddy/Caddyfile:ro
+      - type: bind
+        source: /srv/nexus-web
+        target: /srv/nexus-web
+        read_only: true
+        bind:
+          create_host_path: false
       - caddy_data:/data
       - caddy_config:/config
     networks: [edge, public]
