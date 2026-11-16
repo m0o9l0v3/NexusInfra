@@ -1,0 +1,60 @@
+{
+    email {$ACME_EMAIL}
+    log {
+        output stdout
+        format json
+    }
+}
+
+(headers) {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-Frame-Options "DENY"
+        -Server
+    }
+}
+
+{$API_DOMAIN} {
+    import headers
+    encode zstd gzip
+    reverse_proxy public-api:8080
+}
+
+{$SITE_DOMAIN} {
+    import headers
+    encode zstd gzip
+    root * /srv/nexus-web/current
+
+    @assets {
+        path /assets/*
+        file
+    }
+    header @assets Cache-Control "public, max-age=31536000, immutable"
+
+    @html path / /development/ /status/ /tech/ *.html
+    header @html Cache-Control "no-cache"
+
+    file_server
+}
+
+# Studio (#9). Everything above is byte-for-byte the contract of Caddyfile.pg17-api;
+# scripts/validate-pg17-studio-edge.py checks that. Rollback = mount Caddyfile.pg17-api again.
+{$STUDIO_DOMAIN} {
+    import headers
+    header X-Robots-Tag "noindex, nofollow"
+    encode zstd gzip
+
+    # Path is kept (handle, not handle_path). No trusted_proxies: Caddy overwrites any
+    # client X-Forwarded-* and sends its own; studio-api trusts only the studio subnet.
+    handle /api/* {
+        header Cache-Control "no-store"
+        reverse_proxy studio-api:8080
+    }
+
+    # studio-web serves the SPA and falls back to /index.html for direct URLs.
+    handle {
+        reverse_proxy studio-web:8080
+    }
+}

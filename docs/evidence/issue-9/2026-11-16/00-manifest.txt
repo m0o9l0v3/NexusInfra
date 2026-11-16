@@ -1,0 +1,16 @@
+rehearsal: 2026-11-16, colima nexus-db-verify (linux/arm64), disposable; no production contact
+nexus-infra feat/pg17-studio-edge (this PR) on origin/main de3793f: compose.pg17-edge.yaml + compose.pg17-studio.yaml, Caddyfile.pg17-api / Caddyfile.pg17-with-studio, unchanged production shape
+nexus-studio 165d4687d5b8a02b78fe5d470a309592a2c16022 (the commit of the production Studio images), built locally for arm64:
+  studio-api sha256:aa63da492782dfe755549419def48277810b64fa6fe6f0166b70f33a6af0f242
+    rehearsal-only deviation: `apt-get update` got `-o Acquire::Retries=10 -o Acquire::http::Timeout=60` because the arm64 Ubuntu mirror kept failing; nothing else differs
+  studio-web sha256:1e2ac68e1a369245ce7b9c3cde8e5bbfddbdeac3132baf3f08c16345984b1de1
+  (production uses the native amd64 builds of the same commit: api cb2e9cbf…05fb, web ade96b9f…8e42)
+public-api sha256:2d9a618655db12ed00002170099283eae5f0fc32f5efc7b5f625d4d0bd496efb (local arm64 build of NexusMobile f42d9da, same ID as the 2026-11-15 rehearsal)
+caddy caddy@sha256:0c994536bddb66445885237f1a5dcc1916bccea922661c76b4e9fc24061f9b52 (v2.11.4 arm64; the adopted amd64 digest crashes under emulation, see first-bundle-publish evidence)
+postgres postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 (17.11)
+DB built in the production order B1-B4, C1-C6 with the production input SHA-256s (01-db-build.txt); studio-migrate.sql = NexusStudio CI run 43469460316 artifact c6df200b
+domains: www.localhost / api.localhost / studio.localhost so the unchanged Caddyfiles use Caddy's internal CA (no ACME); TLS verified against that root
+subnets: edge 172.30.241.0/28, studio 172.30.242.0/28 (rehearsal values only)
+reach: ssh tunnel from the Mac loopback to the VM's 443/80; scripts/studio-edge-http-checks.sh ran on the Mac
+validators: the base edge validator rejects only the local public-api image ID (not a registry digest); every other check passed
+files: rehearse-studio-edge.sh (db, env), rehearse-flow.sh (§5-§9), 01-db-build.txt, 02-flow.txt, 03-caddy-swap-gap.txt, 04-review-privilege-check.txt

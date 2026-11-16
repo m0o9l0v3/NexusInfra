@@ -65,7 +65,7 @@ decisions:
 - 設計確認済み（2026-10-18）: [Issue #6 T4](https://github.com/m0o9l0v3/NexusInfra/issues/6)はサービス集合を`{"public-api", "caddy"}`に限定し、各サービスの接続networkも検査する。今回validatorと拒否テストを実装した。実networkの参加状態は運用時に別途確認する。
 - 採用するCaddy版・digestで、受信した偽装`X-Forwarded-*`が信頼されず、接続元IPを基に転送されることを隔離環境で確認する。[Caddy公式資料](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#defaults)は既定で受信値を無視すると説明しているが、採用イメージでの実行確認は未完了。
 - 起動時にedgeの実参加コンテナを確認する手順を定める。静的validatorでは運用中の手動接続までは防げない。
-- [Issue #9](https://github.com/m0o9l0v3/NexusInfra/issues/9)でStudioを同じCaddyに追加する前に、案Bまたはnetwork分離を含めて信頼範囲を再判断する。同じsubnetをそのまま信頼することは今回の決定に含めない。
+- [Issue #9](https://github.com/m0o9l0v3/NexusInfra/issues/9)でStudioを同じCaddyに追加する前に、案Bまたはnetwork分離を含めて信頼範囲を再判断する。同じsubnetをそのまま信頼することは今回の決定に含めない。（2026-11-16: network分離を採用。[Studioの常設](studio-hosting.md) 1.1節）
 
 ### 決定
 

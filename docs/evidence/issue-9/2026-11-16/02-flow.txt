@@ -1,0 +1,135 @@
+== 0. today's production shape: base edge only
+PASS (rehearsal): only the local public-api image ID differs from a registry digest
+PASS: www: / 200
+PASS: api: /health 200, CORS for the site origin
+PASS: api: /health has no CORS for the Studio origin
+PASS: api: /api/v2/bundle (404) has no CORS
+PASS: rollback: Studio is not served (no TLS/connection)
+RESULT: 0 failure(s)
+== S-1 validate the merged config
+PASS (rehearsal): only the local public-api image ID differs from a registry digest
+PASS (rehearsal): only the local public-api image ID differs from a registry digest
+== S-2 studio-api + studio-web only
+PASS: caddy and public-api not recreated by S-2
+app_no_role_attributes|t
+app_not_member_of_migrator_or_owner|t
+app_cannot_create_in_studio_or_delivery|t
+app_cannot_create_in_public|t
+app_cannot_write_history|t
+app_cannot_read_public_api_tables|t
+app_bundles_insert_select_only|t
+app_pointer_no_delete|t
+app_does_not_own_objects|t
+public_cannot_use_studio|t
+studio_connections|<none>|true
+rehearsal-admin@example.invalid を登録しました。
+PASS: www: / 200
+PASS: api: /health 200, CORS for the site origin
+PASS: api: /health has no CORS for the Studio origin
+PASS: api: /api/v2/bundle (404) has no CORS
+PASS: rollback: Studio is not served (no TLS/connection)
+RESULT: 0 failure(s)
+== S-3 swap the Caddy config
+PASS: public-api not recreated by S-3
+edge:  caddy public-api 
+studio:  caddy studio-api studio-web 
+80/tcp -> 0.0.0.0:80
+80/tcp -> [::]:80
+443/tcp -> 0.0.0.0:443
+443/tcp -> [::]:443
+studio-api ports: []
+studio-web ports: []
+public-api ports: []
+== 6.1 HTTP checks with login/logout
+PASS: www: / 200
+PASS: api: /health 200, CORS for the site origin
+PASS: api: /health has no CORS for the Studio origin
+PASS: api: /api/v2/bundle (404) has no CORS
+PASS: studio: / 200 text/html
+PASS: studio: HSTS max-age=31536000 (no includeSubDomains)
+PASS: studio: X-Frame-Options DENY, nosniff
+PASS: studio: X-Robots-Tag noindex
+PASS: studio: no Server header
+PASS: studio: direct URL /releases/history 200 = index.html (SPA fallback)
+PASS: studio: /assets/index-B2UDRTMA.js 200 javascript
+PASS: studio: http -> 308 https
+PASS: studio: /api/auth/csrf 200
+PASS: csrf: nexus_studio_csrf is Secure; HttpOnly; SameSite=Strict
+PASS: studio: /api/* Cache-Control no-store
+PASS: studio: spoofed X-Forwarded-*/Forwarded ignored (200)
+PASS: spoofed: nexus_studio_csrf is Secure; HttpOnly; SameSite=Strict
+PASS: studio: no CORS for other origins
+PASS: studio: /api/auth/me without session 401
+PASS: studio: login without CSRF token 400 csrf_invalid
+INFO: https://studio.localhost/health -> 200 (served by studio-web; studio-api /health is not routed)
+PASS: login: wrong credentials 401
+PASS: login: 204
+PASS: login: nexus_studio_session is Secure; HttpOnly; SameSite=Strict
+PASS: login: /api/auth/me 200
+PASS: logout: 204
+PASS: logout: /api/auth/me 401 afterwards
+RESULT: 0 failure(s)
+== DB least privilege while Studio is in use
+app_no_role_attributes|t
+app_not_member_of_migrator_or_owner|t
+app_cannot_create_in_studio_or_delivery|t
+app_cannot_create_in_public|t
+app_cannot_write_history|t
+app_cannot_read_public_api_tables|t
+app_bundles_insert_select_only|t
+app_pointer_no_delete|t
+app_does_not_own_objects|t
+public_cannot_use_studio|t
+studio_connections|nexus_studio_app|true
+== X-Forwarded-Proto from outside the trusted subnet (direct to studio-api on backend) is not trusted
+backend, X-Forwarded-Proto https -> 500
+backend, X-Forwarded-Proto http -> 500
+studio network (trusted), X-Forwarded-Proto https -> 200
+public network (internet side) -> studio-api resolvable? 000
+unreachable
+== session survives a studio-api restart (DataProtection keys on the volume)
+me with the pre-restart cookie -> 200
+keys: 1 files, mode 700
+== R1 restore the pre-Studio Caddy config, then confirm www/api
+PASS: public-api not recreated by R1
+PASS: www: / 200
+PASS: api: /health 200, CORS for the site origin
+PASS: api: /health has no CORS for the Studio origin
+PASS: api: /api/v2/bundle (404) has no CORS
+PASS: rollback: Studio is not served (no TLS/connection)
+RESULT: 0 failure(s)
+edge:  caddy public-api 
+studio:  studio-api studio-web 
+== R2 stop only the Studio services (no down -v, no volume rm)
+caddy running
+public-api running
+studio-api exited
+studio-web exited
+nexus-edge-pg17_caddy_config
+nexus-edge-pg17_caddy_data
+nexus-edge-pg17_studio_dataprotection_keys
+after_rollback|16|1|0
+== re-apply after rollback (S-2, S-3 again)
+PASS: www: / 200
+PASS: api: /health 200, CORS for the site origin
+PASS: api: /health has no CORS for the Studio origin
+PASS: api: /api/v2/bundle (404) has no CORS
+PASS: studio: / 200 text/html
+PASS: studio: HSTS max-age=31536000 (no includeSubDomains)
+PASS: studio: X-Frame-Options DENY, nosniff
+PASS: studio: X-Robots-Tag noindex
+PASS: studio: no Server header
+PASS: studio: direct URL /releases/history 200 = index.html (SPA fallback)
+PASS: studio: /assets/index-B2UDRTMA.js 200 javascript
+PASS: studio: http -> 308 https
+PASS: studio: /api/auth/csrf 200
+PASS: csrf: nexus_studio_csrf is Secure; HttpOnly; SameSite=Strict
+PASS: studio: /api/* Cache-Control no-store
+PASS: studio: spoofed X-Forwarded-*/Forwarded ignored (200)
+PASS: spoofed: nexus_studio_csrf is Secure; HttpOnly; SameSite=Strict
+PASS: studio: no CORS for other origins
+PASS: studio: /api/auth/me without session 401
+PASS: studio: login without CSRF token 400 csrf_invalid
+INFO: https://studio.localhost/health -> 200 (served by studio-web; studio-api /health is not routed)
+RESULT: 0 failure(s)
+REHEARSAL_DONE

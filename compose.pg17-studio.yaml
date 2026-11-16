@@ -1,0 +1,55 @@
+# Studio overlay for the PG17 edge (#9). Always use it together with the base file, in this order:
+#   docker compose --env-file /etc/nexus/pg17-edge.env --env-file /etc/nexus/pg17-studio.env \
+#     -p nexus-edge-pg17 -f compose.pg17-edge.yaml -f compose.pg17-studio.yaml ...
+# It adds studio-api and studio-web on their own internal `studio` network and swaps the one Caddy's
+# config to Caddyfile.pg17-with-studio. The `edge` network (Caddy + public-api, DEC-1) is unchanged.
+# Rollback: `up -d --no-deps caddy` with the base file only, then stop studio-api/studio-web.
+# Never combine with compose.yaml (PG18). No database lifecycle or migration is owned here.
+services:
+  studio-api:
+    image: ${PG17_STUDIO_API_IMAGE:?pin the reviewed studio-api image (digest or local image ID)}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__StudioDatabaseFile: /run/secrets/studio_connection
+      ReverseProxy__TrustedNetwork: ${PG17_STUDIO_SUBNET:?set the reviewed studio subnet}
+      DataProtection__KeysDirectory: /var/lib/nexus-studio/dataprotection-keys
+    secrets: [studio_connection]
+    volumes:
+      - studio_dataprotection_keys:/var/lib/nexus-studio/dataprotection-keys
+    networks: [backend, studio]
+    healthcheck:
+      test: [CMD, /app/healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: &logs
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  studio-web:
+    image: ${PG17_STUDIO_WEB_IMAGE:?pin the reviewed studio-web image (digest or local image ID)}
+    restart: unless-stopped
+    networks: [studio]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *logs
+  caddy:
+    environment:
+      STUDIO_DOMAIN: ${PG17_STUDIO_DOMAIN:?set the Studio domain}
+    volumes:
+      - ./Caddyfile.pg17-with-studio:/etc/caddy/Caddyfile:ro
+    networks: [studio]
+networks:
+  studio:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${PG17_STUDIO_SUBNET:?set the reviewed studio subnet}
+volumes:
+  studio_dataprotection_keys: {}
+secrets:
+  studio_connection:
+    file: ${PG17_STUDIO_SECRET_DIR:?private directory}/studio_connection

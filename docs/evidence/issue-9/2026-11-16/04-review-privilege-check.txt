@@ -1,0 +1,11 @@
+# Review fix (Codex P2 on #30): has_table_privilege('…', 'INSERT,SELECT') is true when ANY listed privilege is held.
+# studio-runtime-privileges.sql now checks required privileges one by one, and also checks the pointer's SELECT/INSERT/UPDATE.
+# Fixture: disposable PG17.11 (same digest) with only the roles/schemas/tables these rows read. 02-flow.txt predates this fix.
+-- full grants (participant_bundles INSERT,SELECT; current_bundle SELECT,INSERT,UPDATE)
+app_bundles_insert_select_only|t
+app_pointer_select_insert_update|t
+app_pointer_no_delete|t
+-- INSERT on participant_bundles and UPDATE on current_bundle revoked
+app_bundles_insert_select_only|f
+app_pointer_select_insert_update|f
+app_pointer_no_delete|t
