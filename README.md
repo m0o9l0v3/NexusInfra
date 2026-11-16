@@ -15,6 +15,7 @@
 - [現行PG17向けAPI公開レイヤー（本番未適用）](docs/pg17-public-edge.md#8-実装構成と環境変数)：独立Compose・env・安全検査・手動導入・rollback・隔離検証
 - [PG17 baselineとpublic-api runtime role](docs/pg17-baseline.md)：Mobile移行経路の調査、role契約、隔離PG17での構築・検証（本番未適用）
 - [最初の参加者bundleの公開（本番未適用）](docs/first-bundle-publish.md)：Studioを常設せずにVPSの一時Studioで公開する手順、確認、切り戻し、2026-11-15のリハーサル（Issue #17）
+- [Studioの常設（`studio.nexus-app.jp`、本番未適用）](docs/studio-hosting.md)：同じCaddyへの設定差し替え、Studio専用network、承認・手順・確認・切り戻し、2026-11-16の隔離検証（Issue #9・#8）
 - [2026-11-15 本番導入の記録](docs/operations/2026-11-15-production-deploy.md)：公開サイト・公開API・PG17の導入、digest、承認A/B/C、問題と対応、検証、未了項目
 - [構成](docs/architecture.md)・[導入](docs/deployment.md)・[DB migration](docs/migration.md)
 - [18移行後のバックアップと復元](docs/backup-restore.md)・[災害復旧](docs/disaster-recovery.md)・[本番適用前チェック](docs/security-checklist.md)

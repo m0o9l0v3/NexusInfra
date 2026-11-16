@@ -1,0 +1,37 @@
+== SHA256SUMS (inputs)
+0ec65dce204f27fd01db974cc9508f2e36594cfe1708b0c84af0aca80fd4d65b  ./01-roles.sql
+b71231e47693c3957a04b48fe339fbf769778789fa6fd02068edbe8b3cd65b93  ./02-delivery-schema.sql
+f7d516a8ac9488bfa0c3dc1d674b836d54363cff966e3376ae14faceadc590a2  ./03-grant-delivery.sql
+456bbf9836b5fede04fa0d914beaca743456ee84452c63db13479667c8e9c134  ./grant-runtime.sql
+d662f59548e90615d16b416a208ce8b5813eeb529960cad75fd4b1ef3050ce4a  ./grant-studio-runtime.sql
+7cf58c307611ebec07e617add3f18d7fa65eee30c6de16dc2d989d5e4a9da763  ./mobile-migrate.sql
+c6df200b5aa7e3338bc7c558c88ca51d24230747caf59e83ec8f058d2a037533  ./studio-migrate.sql
+951f09c85e58df6d8e013451044b6ef8b747c1041ea618b275799fb39afbf62f  studio-pg17/setup-studio-roles.sh
+769fd80e26624598d7e5f42b2db674175ac7cf4a9ba731f94d4eeb1490b4a53f  studio-pg17/setup-studio-roles.sql
+server_version|17.11
+== B1
+== B2
+ pg_advisory_lock 
+------------------
+ 
+(1 row)
+
+ pg_advisory_unlock 
+--------------------
+ t
+(1 row)
+
+== B3
+NOTICE:  policy "nexus_public_visible" for relation "spots" does not exist, skipping
+NOTICE:  policy "nexus_admin_all" for relation "spots" does not exist, skipping
+NOTICE:  policy "nexus_public_visible" for relation "events" does not exist, skipping
+NOTICE:  policy "nexus_admin_all" for relation "events" does not exist, skipping
+== C1
+== C2
+== C3
+== C4
+== C5
+== C6
+studio_history|16|20261112071332_RemoveCampusGroundEntityKind
+public_cannot_use_studio|t
+DB_READY

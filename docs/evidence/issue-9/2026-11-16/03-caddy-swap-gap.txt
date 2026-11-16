@@ -1,0 +1,8 @@
+# api.localhost/health polled every ~0.1 s (1 s timeout) while the one Caddy was recreated (`up -d --no-deps caddy`).
+# Studio -> base (rollback R1):
+non-200 probes: 3 of 150 (~0.1s apart)
+# base -> Studio (S-3):
+non-200 probes: 3 of 150 (~0.1s apart)
+# => www/api are unavailable for roughly 1-2 s per swap. Certificates and the ACME account stay in caddy_data.
+# Reason for the direct-to-studio-api 500 from the untrusted backend network (studio-api log, first line):
+System.InvalidOperationException: The antiforgery system has the configuration value AntiforgeryOptions.Cookie.SecurePolicy = Always, but the current request is not an SSL request.
