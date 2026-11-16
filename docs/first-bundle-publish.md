@@ -1,6 +1,6 @@
 # 最初の参加者 bundle を本番に公開する手順（Studio を常設しない一時セッション）
 
-状態: **手順とリハーサルの記録。本番には未適用。** 2026-11-15 に使い捨ての PG17.11（colima）で通しのリハーサルを行った（7節）。本番の操作はすべてオーナーが行う。Claude・CI は本番に接続しない。
+状態: **2026-11-16 に本番へ適用済み**（Release #1、版 1。記録は8節）。それ以前に、2026-11-15 に使い捨ての PG17.11（colima）で通しのリハーサルを行った（7節）。本番の操作はすべてオーナーが行う。Claude・CI は本番に接続しない。
 
 関係: #17（`delivery` の権限と Caddy 経由の確認）、#8（Studio の role と `studio`・`delivery` スキーマ、2026-11-15 本番適用済み）、#9（Studio の常設。未着手）、NexusMobile E2-5（配信契約）・E2-5 改訂1（2.1.0、イベントの同梱）、NexusMobile #22・#109（iOS の取得と保存）、NexusStudio `deploy/README.md`。
 
@@ -130,7 +130,23 @@ shasum -a 256 nexus-studio-"$STUDIO_COMMIT".tar.gz        # 私有メモに記�
 cd <nexus-infra のチェックアウト> && git fetch origin   # この文書を含む origin/main
 ```
 
-VPS の root 所有 0700 の作業ディレクトリ（例 `/root/nexus-first-bundle-<日付>/`）へ、tar.gz と NexusInfra の `compose.studio-oneoff-publish.yml`・`Caddyfile.studio-oneoff`・`scripts/first-bundle-db-checks.sh` を送る。VPS で `sha256sum` が Mac の値と一致すること。
+VPS の root 所有 0700 の作業ディレクトリ（例 `/root/nexus-first-bundle-<日付>/`）へ、次の6つのファイルを送る。VPS で `sha256sum` が Mac の値と一致すること。
+
+- tar.gz
+- NexusInfra の `compose.studio-oneoff-publish.yml`・`Caddyfile.studio-oneoff`・`scripts/first-bundle-db-checks.sh`・`scripts/backup-pg17-source.sh`（4.3）・`sql/pg17-baseline/restore-fingerprint-post-c.sql`（4.3）
+
+共有のチェックアウトが別のブランチにある場合は、作業ツリーではなく `git show origin/main:<path> > <送付用ディレクトリ>/<名前>` で取り出す。送付用ディレクトリで `shasum -a 256 * > SHA256SUMS.mac` を作っておくと、VPS で `sha256sum -c SHA256SUMS.mac` で照合できる。
+
+`scp` は SSH ユーザーのホームまでしか書けない。いったんそこへ送り、root で作業ディレクトリへ移す（2026-11-16 の本番で使った形）。
+
+```sh
+# Mac（`<VPS>` は ssh の接続先。`<` `>` は付けない）
+scp -r <送付用ディレクトリ> <VPS>:first-bundle-<日付>
+# VPS（root）
+W=/root/nexus-first-bundle-<日付>
+install -d -m 0700 "$W" && mv /home/<SSHユーザー>/first-bundle-<日付>/* "$W"/ && rmdir /home/<SSHユーザー>/first-bundle-<日付> \
+  && chown -R root:root "$W" && cd "$W" && sha256sum -c SHA256SUMS.mac
+```
 
 ### 4.2 事前確認（読み取りだけ）
 
@@ -156,6 +172,39 @@ curl -s -o /dev/null -w '%{http_code}\n' https://api.nexus-app.jp/api/v2/bundle 
 3. Mac の隔離 PG17（本番と同じ image、新しい空 volume、`internal` network、`POSTGRES_USER=nexus`・`POSTGRES_DB=postgres`）に **`cluster.sql` を `psql -X -q -U nexus -d postgres < cluster.sql` で流す**。エラーは `role "nexus" already exists` の1件だけであること（初期化ユーザーと同じ名前のため）。ロールのパスワードは戻らない（`--no-role-passwords`）。
 4. NexusInfra `sql/pg17-baseline/restore-fingerprint-post-c.sql`（読み取りだけ。ロール・スキーマ・所有者・実効 ACL・各表の行数・RLS・トリガー・関数・両方の移行履歴・`delivery` の状態）を、本番（`docker exec -i --user postgres <PG17_CONTAINER> psql -X -U nexus -d nexus < restore-fingerprint-post-c.sql > fp-source.txt`）と復元先で実行し、**`diff` が空**であること。出力に秘密は含まれないが、私有メモ側に保存する。
 5. 公開前の期待値の一部: `delivery_current|none`、`delivery_payload_sha|none`、`studio_history` が16件、`trigger|delivery.current_bundle|current_bundle_monotonic|O|…`。
+
+2026-11-16 の本番で使ったコマンド（暗号化は OpenSSL の AES-256・PBKDF2。パスフレーズは新しく作り、パスワードマネージャーに置く）:
+
+```sh
+# VPS（root）：作成・照合・本番側の fingerprint
+install -d -m 0700 "$W/backup"
+PG17_CONTAINER=<PG17_CONTAINER> PG17_DB_USER=nexus PG17_DB_NAME=nexus PG17_BACKUP_DIR="$W/backup" ALLOW_PG17_EXPORT=1 sh "$W/backup-pg17-source.sh"
+B=$(ls -d "$W"/backup/pg17-*Z) && cd "$B" && sha256sum -c SHA256SUMS && grep -E '^(CREATE|ALTER) ROLE' globals.sql
+docker exec -i --user postgres <PG17_CONTAINER> psql -X -U nexus -d nexus < "$W/restore-fingerprint-post-c.sql" > "$B/fp-source.txt"
+# VPS（root）：暗号化して、SSH ユーザーが読める場所へ一時的に置く
+cd "$W/backup" && G=$(basename "$B")
+tar -cf - "$G" | openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -salt -out "$G.tar.enc" && sha256sum "$G.tar.enc"
+install -m 0600 -o <SSHユーザー> -g <SSHユーザー> "$G.tar.enc" /home/<SSHユーザー>/
+# Mac：受け取り、SHA-256・サイズ・時刻を記録する。そのあと VPS 側の一時コピーを rm する
+install -d -m 0700 ~/nexus-backups && scp <VPS>:<G>.tar.enc ~/nexus-backups/ && shasum -a 256 ~/nexus-backups/<G>.tar.enc && ls -l ~/nexus-backups/<G>.tar.enc
+# Mac：先にパスフレーズが正しいかを、展開せずに確かめる（復号は1回入力なので、打ち間違いは tar のエラーとして出る）
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -in ~/nexus-backups/<G>.tar.enc | tar -tf -
+# Mac：隔離 PG17（`compose.pg17-restore.yml` は POSTGRES_USER=postgres なので使わない）
+export DOCKER_CONTEXT=<隔離用の docker context>     # 例 colima の別プロファイル。VPS のシェルでは設定しない
+R=~/nexus-backups/restore-<日付> && install -d -m 0700 "$R"
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -in ~/nexus-backups/<G>.tar.enc | tar -xf - -C "$R"
+cd "$R/<G>" && shasum -a 256 -c SHA256SUMS
+docker volume create nexus-pg17-restore-<日付> && docker network create --internal nexus-pg17-restore-<日付>
+docker run -d --name nexus-pg17-restore-<日付> --network nexus-pg17-restore-<日付> -v nexus-pg17-restore-<日付>:/var/lib/postgresql/data \
+  -e POSTGRES_USER=nexus -e POSTGRES_DB=postgres -e POSTGRES_PASSWORD="$(openssl rand -hex 24)" postgres@sha256:<本番の PG17.11 digest>
+until docker exec nexus-pg17-restore-<日付> pg_isready -U nexus -d postgres; do sleep 2; done
+docker exec -i nexus-pg17-restore-<日付> psql -X -q -U nexus -d postgres < cluster.sql > /dev/null 2> restore-err.txt; grep ERROR restore-err.txt
+docker exec -i nexus-pg17-restore-<日付> psql -X -U nexus -d nexus < <restore-fingerprint-post-c.sql> > fp-restore.txt
+diff fp-source.txt fp-restore.txt && echo FP_MATCH
+# Mac：片付け（暗号化したコピーは残す）
+docker rm -f nexus-pg17-restore-<日付> && docker volume rm nexus-pg17-restore-<日付> && docker network rm nexus-pg17-restore-<日付>
+rm -rf "$R"
+```
 
 `nexus.dump`（`--no-owner --no-acl`）だけからの復元は、`studio`・`delivery` の所有者（`nexus_studio_migrator`）を戻せず、まだリハーサルしていない。6節 R3 で復元するときは `cluster.sql` を使う。合格するまで先へ進まない。
 
@@ -197,6 +246,8 @@ DC="docker compose --env-file oneoff.env -p nexus-studio-oneoff-<YYYYMMDD> -f co
 $DC config --quiet && echo config-ok
 ```
 
+- 私有ディレクトリの場所がわからないときは、パスを表示せずに変数へ入れる: `S=$(dirname "$(find / -xdev -name nexus_studio_app_password -type f 2>/dev/null | head -1)")`、`ls "$S" | grep -c '_password$'` が `3`。以降の `<私有ディレクトリ>` は `"$S"` にする（5.1 でも使うので同じシェルで続ける）。
+- DB の alias は `docker inspect --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}: {{join $v.Aliases " "}}{{println}}{{end}}' "$C"`、Caddy の digest は `docker inspect --format '{{.Config.Image}}' <PG17 edge の Caddy の container>` で確かめる。subnet は `docker network inspect $(docker network ls -q) --format '{{.Name}} {{range .IPAM.Config}}{{.Subnet}} {{end}}'` で重ならないことを確かめる。
 - `STUDIO_ONEOFF_SUBNET` は PG17 edge（`PG17_EDGE_SUBNET`）と別の値にする。Studio はこの subnet からの `X-Forwarded-Proto` だけを信頼する（public-api の DEC-1 の信頼範囲は変わらない）。
 
 ### 4.6 管理者の登録（P-4）
@@ -215,12 +266,14 @@ $DC ps                                         # studio-api・studio-web が hea
 curl -sk -o /dev/null -w "%{http_code}\n" https://localhost:<ポート>/health   # 200
 ```
 
+起動の直後は studio-api が `health: starting` で、`/health` が 502 になる。30秒ほど待ってからもう一度確かめる。
+
 Mac で `ssh -N -L 8443:127.0.0.1:<ポート> <VPS>` を開き、Chrome で `https://localhost:8443` を開く（内部 CA の警告は、この一時セッションだけ許可する）。
 
 1. 4.6 の管理者でログインする。
-2. 2.1節の確定した値で「開催回」を1件作って保存する（カテゴリは作らない）。
-3. 「公開確認」で対象を選び、**公開阻止 0件**であることと差分を確かめる。警告があれば内容を記録する。
-4. 公開メッセージ（例「最初の bundle」）を入れて公開する。結果が「公開成功」で、Release の番号が 1 であること。
+2. 2.1節の確定した値で「Open Campus」に開催回を1件作り、［下書き保存］する（カテゴリは作らない）。
+3. 同じ画面の［公開内容を確認］（未保存なら［保存して確認］）で「公開確認」を開く。**公開阻止 0・警告 0** であることと、「公開中との差分」の名称・開催日（`11月14日 10:00–13:30` の形）が承認した値と一致することを確かめる。差分の開催日には年が出ないので、年は編集画面で確かめる。「Validation」の画面（「診断した下書き n件」）は全下書きの診断で、公開確認ではない。
+4. ［この開催回を公開］を押す。結果が「公開成功」で、新しい公開版が Release #1 であること。
 5. 「公開履歴」に Release 1 があることを確かめ、ログアウトする。
 
 止める条件: 公開阻止がある、結果が「失敗」（公開内容は変わらない。原因をログで確認し、直してから3から）。
@@ -248,7 +301,14 @@ DB_NETWORK=<DB の network 名> DB_HOST=<DB の alias> PG_IMAGE="$(docker inspec
 - 全 probe を `BEGIN … ROLLBACK` の中で各ロールとして実行する（拒否されるはずの更新が通っても残らない）。確認内容: 版が 1、payload の SHA-256・長さが一致、`nexus_public` は2表の SELECT だけ、`nexus_studio_app` は UPDATE・DELETE・TRUNCATE・トリガー無効化・**ポインタの後退**が拒否され、INSERT と前進は可能、所有者でも後退は拒否、前後で状態が同じ。
 - 期待値: `RESULT: 0 failure(s)`。#17 の受入条件2・3を本番で確かめた記録になる。
 
-監視（#17 の受入条件4）: `monitor-delivery-size.sql` を `nexus_public` で実行し、`1|<bytes>|<size>|f` になること。
+監視（#17 の受入条件4）: `monitor-delivery-size.sql` を `nexus_public` で実行し、`1|<bytes>|<size>|f` になること。VPS にこの SQL を送っていない場合は、同じ判定を1行で行う（2026-11-16 は `1|90112|f`）:
+
+```sh
+docker run --rm -i --network <DB の network 名> -v "$S:/run/s:ro" --entrypoint sh "$(docker inspect --type container --format '{{.Image}}' "$C")" \
+  -c 'PGPASSWORD="$(cat /run/s/nexus_public_password)" exec psql -X -At -h <DB の alias> -U nexus_public -d nexus' <<'EOF'
+SELECT (SELECT count(*) FROM delivery.participant_bundles), pg_total_relation_size('delivery.participant_bundles')+pg_total_relation_size('delivery.current_bundle'), (SELECT count(*) FROM delivery.participant_bundles) > 500;
+EOF
+```
 
 ### 5.2 Caddy 経由（Mac、読み取り）
 
@@ -265,8 +325,10 @@ API=https://api.nexus-app.jp SITE_ORIGIN=https://www.nexus-app.jp EXPECT_VERSION
 Release ビルドの接続先（`NEXUS_API_BASE_URL`）は空のままなので、Debug ビルドで確かめる。
 
 1. `apps/nexus-ios/Config/Local.xcconfig`（Git に入らない）に `NEXUS_API_BASE_URL = https:/$()/api.nexus-app.jp` を書く。
+   共有のチェックアウトが古いときは、`git worktree add --detach <新しいフォルダ> origin/develop` で別に作る。
+   実機の署名: そのフォルダの Xcode で Signing & Capabilities の Team を自分のチームにする。`dev.nexusapp.mobile` が自分のチームで登録できない（Failed Registering Bundle Identifier）ときは、画面では書き換えられない（project の `NEXUS_PRODUCT_BUNDLE_IDENTIFIER` から作られる）ので、同じ Local.xcconfig に `NEXUS_PRODUCT_BUNDLE_IDENTIFIER = <一意の値>` を足して Xcode を開き直す（target の xcconfig が project の設定より優先される）。初回は iPhone の 設定 → 一般 → VPN とデバイス管理 で開発元を信頼する。
 2. scheme「Nexus API」で実機にインストールして起動する。その iPhone で以前に別の環境（隔離環境など）の bundle を取得していたら、先にアプリを削除する（iOS は自分の版より低い版を受け取らず、本番の版は 1 から始まる）。
-3. 期待: ホームに開催日カード「11月14日（土）10:00〜13:30／終了」が出る（2.1節の内容の場合）。マップは「表示できる建物・地点がありません」。設定などの保存版の表示に `bundle_version` 1・公開日時が出る。機内モードで再起動しても同じ表示（保存版）になる。
+3. 期待: ホームに開催日カード「11月14日（土）10:00〜13:30／終了」が出る（2.1節の内容の場合）。マップは「表示できる建物・地点がありません」。設定などの保存版の表示に `bundle_version` 1・公開日時が出る。機内モードで再起動しても同じ表示になり、ホームに「保存版を表示しています 版 1・<公開日時> 公開」のバナーが出る。
 4. 終わったら Local.xcconfig を消すか空にする。Release の接続先を設定するかは NexusMobile 側の別判断。
 
 ## 6. 切り戻し（ポインタは戻せない）
@@ -330,3 +392,15 @@ PG17.11（`postgres@sha256:b0f9560a…`）の新しい volume に、[pg17-issue-
 ### 7.7 #8 適用後のバックアップと復元（2026-11-16）
 
 証跡: [docs/evidence/first-bundle-publish/2026-11-16-backup/](evidence/first-bundle-publish/2026-11-16-backup/)。7.1節と同じ手順で作った B・C 適用後の使い捨て PG17.11 に `public.spots` を1行入れ、`backup-pg17-source.sh` と同じ3つの出力（`pg_dumpall --globals-only --no-role-passwords`、`pg_dumpall --no-role-passwords`、`pg_dump --format=custom --no-owner --no-acl`）を取った。`nexus.dump` は `pg_restore -l` で読めた。`globals.sql` のロールの行は 4.3節の6つだった。新しい空の PG17.11（`POSTGRES_USER=nexus`）に `cluster.sql` を流すと、エラーは `role "nexus" already exists` の1件だけで、`restore-fingerprint-post-c.sql` の出力（61行）は元と**完全に一致**した。最初の比較では `studio."__EFMigrationsHistory"` の ACL が元は明示的な所有者権限、復元先は NULL（既定）と表記だけ違ったため、実効 ACL（`acldefault` で補う）で比べる形にした。
+
+## 8. 本番の記録（2026-11-16）
+
+オーナーが3〜5節を本番で行った。Claude は公開エンドポイントだけを Mac から確認した。
+
+- 公開したもの: 開催回1件「11月オープンキャンパス（午前の部）」（2026-11-14、10:00〜13:30 JST、`normal`）。カテゴリ・地図・Spot・イベントはなし。
+- Studio: NexusStudio `165d468`、VPS でネイティブビルド（amd64）。
+- Release #1: 2026-11-16 12:16 JST。bundle は schema 2.1.0、版 1、504 バイト、`sha256 a010e161216feb7340b05f525f0fd181f864ef6a26d9b8b428583eea0fee9171`。
+- 確認結果: §4.3 のバックアップ（`FP_MATCH`、エラーは `role "nexus" already exists` だけ）、§5.1 `RESULT: 0 failure(s)`、監視 `1|90112|f`、§5.2 `RESULT: 0 failure(s)`（gzip・zstd は最小長未満で `NOTE`）、§5.3 実機（develop `7ef6da7`）でホーム・マップ・保存版の表示が期待どおり。
+- 片付け: 一時 Studio のコンテナ・volume・接続ファイルを削除。イメージは #9 まで残す。
+- 残り: 圧縮時の接尾辞付き ETag と 304 は、地図を含む次の版で確かめる（#17）。
+- 詳細は #17 のコメント（issuecomment-6906590112）。
