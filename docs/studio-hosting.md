@@ -2,7 +2,7 @@
 
 この文書は、NexusStudio（管理画面）を本番の PG17 edge に常設するための設計・承認・手順・確認・切り戻しの正本です。本番の操作はすべてオーナーが行います。Claude はコマンドを示し、結果を確かめます。
 
-**この PR の時点では、本番には何もしていません。** 隔離環境での確認だけです（12節）。
+**2026-11-16 に本番へ適用しました**（記録は 12節）。隔離環境での確認は 11節にあります。
 
 ## 0. いまの状態と、この手順で変わること
 
@@ -306,3 +306,18 @@ Studio を止めても、配信中の bundle（`/api/v2/bundle`）は変わり�
 | 差し替えの停止時間 | 約1〜2秒（どちらの向きも 0.1秒おきの確認で 3回だけ失敗） |
 
 本番と違う点: CPU が arm64、Caddy の digest が違う（採用 amd64 の digest はエミュレーションで落ちる）、ACME を使わない（本番では S-3 で `studio.nexus-app.jp` の証明書を取る）、studio-api のビルドで apt の再試行を足した（ミラーの不調のため。アプリは同じ commit）。
+
+## 12. 本番の記録（2026-11-16）
+
+オーナーが S-0〜S-3 を本番で行い、Claude はコマンドを示して結果を確かめた。外からの確認は Mac から行った。
+
+- **承認**: S-1・S-2・S-3 は、それぞれの実行の前にオーナーが承認した。S-0 は読み取りだけで、PR #30 のマージ後に「適用へ」の指示を受けて行った。
+- **S-0**: 送付した 7ファイルの SHA-256 はすべて一致した。edge の既存の `compose.pg17-edge.yaml`（`83d107b9…e558`）と `Caddyfile.pg17-api`（`66b34536…e174`）は main と同じだった。caddy と public-api は healthy で、caddy の再起動は 0回。イメージは api `sha256:cb2e9cbf…05fb`・web `sha256:ade96b9f…8e42`（amd64、revision `165d4687…`）。DNS の `studio` は www と同じホストを指していた。
+- **S-1**: Studio 用のファイルを置いた（既存のファイルは上書きしていない）。Studio の subnet は、空いている `/28` から自動で選んだ。DB の接続先は public-api の接続情報と同じホストにした。`studio_connection` は UID 1654・0400、`pg17-studio.env` は root・0600。validator は3回とも合格した（合成した構成と環境変数、切り戻し先）。
+- **S-2**: studio-api と studio-web は約30秒で healthy になった。caddy と public-api は作り直されていない（稼働時間が続いていた）。ログの `warn` は HTTPS リダイレクトのポートが決まらないという1行だけで、これは想定どおり（HTTPS は Caddy が終端する）。`studio-runtime-privileges.sql` は全行 `t`。`edge` の参加者は caddy と public-api、`studio` の参加者は studio-api と studio-web だった。
+- **S-3**: caddy を作り直し、healthy になった。public-api は作り直されていない。`studio.nexus-app.jp` の証明書を取得した（Let's Encrypt、期限は 2027-02-14）。差し替えたあと、`studio` の参加者に caddy が加わった。ホストに出ているのは 80/443 だけ。
+- **6.1（Mac）**: `studio-edge-http-checks.sh` は `RESULT: 0 failure(s)`。www と api は今までどおりで、CORS は www の `/health` だけ。配信中の bundle は版 1 のまま（ETag `sha256-a010e161…9171`）で、変わっていない。
+- **6.2（オーナー、Chrome）**: 6項目すべて OK。証明書の警告は無く、ログインできた。`nexus_studio_session` は Secure・HttpOnly・SameSite=Strict。直接の URL も開け、公開履歴に Release 1 があり、ログアウトもできた。公開はしていない。
+- **確かめていないこと**: ログインしたあとの `studio_connections` の行（接続が `nexus_studio_app` だけであること）は、本番では確かめていない。隔離環境では確認済み（11節）。
+- **残っているもの**: 送付に使ったファイルの写し（VPS のホームと `/root` の作業ディレクトリ、Mac の `~/nexus-studio-hosting-20261116`）。秘密は含まない。VPS には再起動を求める通知が出ているが、再起動は別に判断する（Studio は `restart: unless-stopped` なので、再起動のあと自動で戻る）。
+

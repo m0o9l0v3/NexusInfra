@@ -71,7 +71,7 @@
 ## 7. 未了・フォローアップ
 
 - [x] **最初のbundle公開**: 手順は[first-bundle-publish.md](../first-bundle-publish.md)（#27）。2026-11-16 12:16 JST に Release #1（版 1）を公開し、`/api/v2/bundle`の200を確認した（同文書 §8、#17）。
-- [ ] **Studioの本番公開**: #9。
+- [x] **Studioの本番公開**: #9。2026-11-16に`studio.nexus-app.jp`で常設（[記録](../studio-hosting.md#12-本番の記録2026-11-16)）。
 - [ ] **監視をHTTP 200の判定へ切り替える**。
 - [x] **iOS実機からの取得確認**（bundle公開後）。2026-11-16、Debugビルドで版 1 を取得・保存し、機内モードでも表示した（[first-bundle-publish.md](../first-bundle-publish.md) §8）。
 - [ ] **スマホSafariでのライト・ダーク表示の確認**。

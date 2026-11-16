@@ -324,4 +324,4 @@ PG18 `compose.yaml`との合成起動、`nexus_postgres_data`のマウント、�
 
 Studioは[Issue #8](https://github.com/m0o9l0v3/NexusInfra/issues/8)のPG17 DB/auth準備と[Issue #9](https://github.com/m0o9l0v3/NexusInfra/issues/9)の結合検証まで非公開。同じCaddyへの追加前にDEC-1の信頼範囲を再判断する。HSTS `includeSubDomains`は関連サブドメインのHTTPS運用確認後に別途判断する。
 
-> 2026-11-16追記: 信頼範囲はStudio専用のinternal network（`edge`とは別subnet）で分離し、HSTSは`includeSubDomains`を付けないと整理した。設計・手順は[Studioの常設](studio-hosting.md)（#9、本番未適用）。
+> 2026-11-16追記: 信頼範囲はStudio専用のinternal network（`edge`とは別subnet）で分離し、HSTSは`includeSubDomains`を付けないと整理した。設計・手順は[Studioの常設](studio-hosting.md)（#9、2026-11-16 本番適用）。
