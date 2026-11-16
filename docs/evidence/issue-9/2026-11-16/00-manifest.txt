@@ -13,4 +13,4 @@ domains: www.localhost / api.localhost / studio.localhost so the unchanged Caddy
 subnets: edge 172.30.241.0/28, studio 172.30.242.0/28 (rehearsal values only)
 reach: ssh tunnel from the Mac loopback to the VM's 443/80; scripts/studio-edge-http-checks.sh ran on the Mac
 validators: the base edge validator rejects only the local public-api image ID (not a registry digest); every other check passed
-files: rehearse-studio-edge.sh (db, env), rehearse-flow.sh (§5-§9), 01-db-build.txt, 02-flow.txt, 03-caddy-swap-gap.txt
+files: rehearse-studio-edge.sh (db, env), rehearse-flow.sh (§5-§9), 01-db-build.txt, 02-flow.txt, 03-caddy-swap-gap.txt, 04-review-privilege-check.txt

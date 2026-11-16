@@ -12,8 +12,13 @@ SELECT 'app_cannot_write_history', NOT has_table_privilege('nexus_studio_app', '
 SELECT 'app_cannot_read_public_api_tables', NOT EXISTS (
   SELECT 1 FROM pg_tables WHERE schemaname = 'public'
    AND has_table_privilege('nexus_studio_app', format('%I.%I', schemaname, tablename), 'SELECT,INSERT,UPDATE,DELETE'));
-SELECT 'app_bundles_insert_select_only', has_table_privilege('nexus_studio_app', 'delivery.participant_bundles', 'INSERT,SELECT')
+-- has_table_privilege with a comma list is true if ANY listed privilege is held: required ones are checked one by one.
+SELECT 'app_bundles_insert_select_only', has_table_privilege('nexus_studio_app', 'delivery.participant_bundles', 'INSERT')
+  AND has_table_privilege('nexus_studio_app', 'delivery.participant_bundles', 'SELECT')
   AND NOT has_table_privilege('nexus_studio_app', 'delivery.participant_bundles', 'UPDATE,DELETE,TRUNCATE');
+SELECT 'app_pointer_select_insert_update', has_table_privilege('nexus_studio_app', 'delivery.current_bundle', 'SELECT')
+  AND has_table_privilege('nexus_studio_app', 'delivery.current_bundle', 'INSERT')
+  AND has_table_privilege('nexus_studio_app', 'delivery.current_bundle', 'UPDATE');
 SELECT 'app_pointer_no_delete', NOT has_table_privilege('nexus_studio_app', 'delivery.current_bundle', 'DELETE,TRUNCATE');
 SELECT 'app_does_not_own_objects', NOT EXISTS (
   SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace

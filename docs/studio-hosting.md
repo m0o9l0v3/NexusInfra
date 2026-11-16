@@ -97,7 +97,7 @@ S-3 の「数秒」は、Caddy のコンテナを作り直すあいだです（�
 
 ## 5. 手順
 
-表記: `<…>` は私有メモの値に置き換えます（`<` `>` は付けない）。実値（IP、パス、container 名、パスワード）は Git・Issue・会話に書きません。VPS では root のシェルで実行します。
+表記: `<…>` は私有メモの値に置き換えます（`<` `>` は付けない）。compose のコマンドには必ず `-f` で PG17 のファイルを指定します（`$BASE`・`$DC`）。`-p` だけでは設定が読まれず、ディレクトリにある既定の `compose.yaml`（PG18 用）を探してしまいます。実値（IP、パス、container 名、パスワード）は Git・Issue・会話に書きません。VPS では root のシェルで実行します。
 
 ### 5.0 S-0 事前確認（読み取りだけ）
 
@@ -112,11 +112,13 @@ VPS（edge の専用ディレクトリで）:
 
 ```sh
 cd <edge のディレクトリ>
+set -a; . /etc/nexus/pg17-edge.env; set +a
+BASE="docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml"   # -f を必ず付ける（無いと既定の compose.yaml を探す）
 sha256sum compose.pg17-edge.yaml Caddyfile.pg17-api compose.pg17-studio.yaml Caddyfile.pg17-with-studio   # 7.1 の値と一致
-docker compose -p nexus-edge-pg17 ps --format '{{.Service}} {{.Status}}'      # public-api healthy、caddy healthy の2つだけ
+$BASE ps --format '{{.Service}} {{.Status}}'      # public-api healthy、caddy healthy の2つだけ
 docker image inspect -f '{{.Id}} {{.Architecture}} {{index .Config.Labels "org.opencontainers.image.revision"}}' nexus-studio-api:165d468 nexus-studio-web:165d468
 docker network inspect $(docker network ls -q) --format '{{.Name}} {{range .IPAM.Config}}{{.Subnet}} {{end}}'   # 使っていない /28 を選ぶ
-docker inspect --format '{{.Config.Image}} {{.RestartCount}}' $(docker compose -p nexus-edge-pg17 ps -q caddy)   # 戻すとき用に私有メモへ
+docker inspect --format '{{.Config.Image}} {{.RestartCount}}' $($BASE ps -q caddy)   # 戻すとき用に私有メモへ
 ```
 
 - 期待値: イメージ ID が `sha256:cb2e9cbf…05fb`（api）・`sha256:ade96b9f…8e42`（web）、`amd64`、revision `165d4687d5b8…`。
@@ -160,7 +162,7 @@ rm "$r"
 ```sh
 $DC up -d --no-deps studio-api studio-web
 $DC ps --format '{{.Service}} {{.Status}}'          # 30秒ほどで studio-api・studio-web が healthy
-docker compose -p nexus-edge-pg17 logs --tail 20 studio-api   # エラーが無いこと（接続文字列は出ない）
+$DC logs --tail 20 studio-api   # エラーが無いこと（接続文字列は出ない）
 docker exec -i --user postgres <PG17_CONTAINER> psql -X -At -U nexus -d nexus < sql/pg17-baseline/studio-runtime-privileges.sql
 ```
 
@@ -173,7 +175,7 @@ docker exec -i --user postgres <PG17_CONTAINER> psql -X -At -U nexus -d nexus < 
 ```sh
 $DC up -d --no-deps caddy
 $DC ps --format '{{.Service}} {{.Status}}'          # caddy が healthy（1分ほどかかる）
-docker compose -p nexus-edge-pg17 logs --tail 50 caddy | grep -E '"level":"error"|certificate obtained'
+$DC logs --tail 50 caddy | grep -E '"level":"error"|certificate obtained'
 ```
 
 - 期待値: `studio.nexus-app.jp` の `certificate obtained successfully` が出る。www・api の証明書は取り直さない。
@@ -203,7 +205,7 @@ STUDIO=https://studio.nexus-app.jp API=https://api.nexus-app.jp SITE=https://www
 ```sh
 docker exec -i --user postgres <PG17_CONTAINER> psql -X -At -U nexus -d nexus < sql/pg17-baseline/studio-runtime-privileges.sql   # 5.2 と同じ
 for n in edge studio; do docker network inspect nexus-edge-pg17_$n --format '{{range .Containers}}{{.Name}} {{end}}'; echo; done
-docker port $(docker compose -p nexus-edge-pg17 ps -q caddy)      # 80 と 443 だけ
+docker port $($DC ps -q caddy)      # 80 と 443 だけ
 ```
 
 - 期待値: `edge` には caddy と public-api だけ、`studio` には caddy・studio-api・studio-web だけ。studio-api・studio-web にはホストの公開ポートが無い。
@@ -299,7 +301,7 @@ Studio を止めても、配信中の bundle（`/api/v2/bundle`）は変わり�
 | CORS・CSRF | 別オリジンに `Access-Control-Allow-Origin` なし。CSRF トークンなしのログインは 400 `csrf_invalid` |
 | ログイン・ログアウト | 誤りは 401、正しいと 204 で `nexus_studio_session` が Secure・HttpOnly・SameSite=Strict、`/me` 200、ログアウト 204 の後 `/me` 401 |
 | studio-api の再起動 | 再起動の前の Cookie で `/me` 200（DataProtection の鍵が volume に残る。ディレクトリは 0700） |
-| DB の最小権限（`studio-runtime-privileges.sql`） | 全項目 `t`。Studio の接続は `nexus_studio_app` だけ |
+| DB の最小権限（`studio-runtime-privileges.sql`） | 全項目 `t`。Studio の接続は `nexus_studio_app` だけ。レビュー後に、必要な権限を1つずつ確かめる形に直し、ポインタの SELECT・INSERT・UPDATE の行を足した（権限を外すと `f` になることを確認、`04-review-privilege-check.txt`） |
 | R1・R2 | Caddy を戻すと Studio は返らず、www・api はそのまま。Studio を止めても volume・移行履歴（16）・管理者（1）・配信（0）は変わらない |
 | 差し替えの停止時間 | 約1〜2秒（どちらの向きも 0.1秒おきの確認で 3回だけ失敗） |
 
