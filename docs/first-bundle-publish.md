@@ -301,12 +301,14 @@ DB_NETWORK=<DB の network 名> DB_HOST=<DB の alias> PG_IMAGE="$(docker inspec
 - 全 probe を `BEGIN … ROLLBACK` の中で各ロールとして実行する（拒否されるはずの更新が通っても残らない）。確認内容: 版が 1、payload の SHA-256・長さが一致、`nexus_public` は2表の SELECT だけ、`nexus_studio_app` は UPDATE・DELETE・TRUNCATE・トリガー無効化・**ポインタの後退**が拒否され、INSERT と前進は可能、所有者でも後退は拒否、前後で状態が同じ。
 - 期待値: `RESULT: 0 failure(s)`。#17 の受入条件2・3を本番で確かめた記録になる。
 
-監視（#17 の受入条件4）: `monitor-delivery-size.sql` を `nexus_public` で実行し、`1|<bytes>|<size>|f` になること。VPS にこの SQL を送っていない場合は、同じ判定を1行で行う（2026-11-16 は `1|90112|f`）:
+監視（#17 の受入条件4）: `monitor-delivery-size.sql` を `nexus_public` で実行し、`1|<bytes>|<size>|f` になること。VPS にこの SQL を送っていない場合は、同じしきい値（合計 1 GiB または 500 行）で判定する（出力は `<rows>|<bytes>|<t/f>`。2026-11-16 は `1|90112|f`）:
 
 ```sh
 docker run --rm -i --network <DB の network 名> -v "$S:/run/s:ro" --entrypoint sh "$(docker inspect --type container --format '{{.Image}}' "$C")" \
   -c 'PGPASSWORD="$(cat /run/s/nexus_public_password)" exec psql -X -At -h <DB の alias> -U nexus_public -d nexus' <<'EOF'
-SELECT (SELECT count(*) FROM delivery.participant_bundles), pg_total_relation_size('delivery.participant_bundles')+pg_total_relation_size('delivery.current_bundle'), (SELECT count(*) FROM delivery.participant_bundles) > 500;
+SELECT rows, total_bytes, (total_bytes > 1073741824 OR rows > 500) AS review_required
+  FROM (SELECT (SELECT count(*) FROM delivery.participant_bundles) AS rows,
+               pg_total_relation_size('delivery.participant_bundles') + pg_total_relation_size('delivery.current_bundle') AS total_bytes) AS sizes;
 EOF
 ```
 
