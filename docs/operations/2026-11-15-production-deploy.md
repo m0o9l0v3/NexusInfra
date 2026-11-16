@@ -51,7 +51,7 @@
 | 事象 | 対応 |
 | --- | --- |
 | 初回サイト配信用Composeが、必須の環境変数2つ（ACME用メールアドレスとAPIドメイン）の不足で停止 | スクリプトを修正し、稼働中のCaddyから既存の設定値と採用イメージ参照を引き継ぐようにした |
-| VPSでのGHCR取得が`denied` | レジストリ認証をやり直し、固定digestの取得を確認。**フォローアップ**: 暫定で使ったclassic PATは、権限を絞って有効期限を付けたfine-grainedトークンへ置き換える（§7） |
+| VPSでのGHCR取得が`denied` | レジストリ認証をやり直し、固定digestの取得を確認。**フォローアップ**: GHCRの取得認証はclassic PATのみが対応する（[pg17-operator-checklist.md](../pg17-operator-checklist.md) D2）。fine-grainedトークンには置き換えず、読み取り専用（`read:packages`のみ）で有効期限を付けたclassic PATへ入れ替える（§7） |
 | 手元の復元中に`docker compose`が`unknown shorthand flag: 'f'`を返した | `docker-compose`を直接呼び出し、専用のランタイムに固定して復元を完了 |
 | Studio移行件数が手順書（14件）と異なった | 最新の16件版へ差し替え、SQLのSHA-256と同じPG17イメージでのCIを照合 |
 
@@ -75,7 +75,7 @@
 - [ ] **監視をHTTP 200の判定へ切り替える**。
 - [ ] **iOS実機からの取得確認**（bundle公開後）。
 - [ ] **スマホSafariでのライト・ダーク表示の確認**。
-- [ ] **PATの入れ替え**: classic PATを、権限を絞り有効期限を付けたfine-grainedトークンに置き換える。
+- [ ] **PATの入れ替え**: VPSのGHCR取得用資格を、読み取り専用（`read:packages`のみ）で有効期限を付けたclassic PATへ入れ替える（GHCRはclassic PATのみ対応のため、fine-grainedにはしない）。
 
 ## 8. この文書に載せないもの
 
