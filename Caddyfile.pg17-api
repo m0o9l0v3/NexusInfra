@@ -33,7 +33,7 @@
     }
     header @assets Cache-Control "public, max-age=31536000, immutable"
 
-    @html path / /development/ /status/ /tech/ *.html
+    @html path / /development/ /status/ /tech/ /privacy/ *.html
     header @html Cache-Control "no-cache"
 
     file_server
