@@ -265,9 +265,9 @@ docker compose -p nexus-edge-pg17 -f compose.pg17-edge.yaml up -d --wait
    VITE_API_BASE_URL=https://api.nexus-app.jp npm run build --workspace web
    ```
 
-2. `web/dist/` の中身だけをVPSの `/srv/nexus-web/releases/<リリースID>/` に置く。4ページのHTML、参照先のアセット、承認済みの画像だけが含まれることを確認する。`current` には `releases/<リリースID>` への相対リンクを使う。更新時は同じ親ディレクトリに一時リンクを作り、Linuxの `mv -T` で `current` へ置き換える。Caddyは親ディレクトリを読み取り専用でマウントするため、コンテナ再起動なしで切り替わる。前回のディレクトリを残し、表示の問題があれば同じ手順でリンクを戻す。
+2. `web/dist/` の中身だけをVPSの `/srv/nexus-web/releases/<リリースID>/` に置く。5ページのHTML（トップ・開発状況・サーバー状況・技術説明・プライバシーポリシー）、参照先のアセット、承認済みの画像だけが含まれることを確認する。`current` には `releases/<リリースID>` への相対リンクを使う。更新時は同じ親ディレクトリに一時リンクを作り、Linuxの `mv -T` で `current` へ置き換える。Caddyは親ディレクトリを読み取り専用でマウントするため、コンテナ再起動なしで切り替わる。前回のディレクトリを残し、表示の問題があれば同じ手順でリンクを戻す。
 3. `www.nexus-app.jp` を同じVPSに向ける。Aレコードを設定し、VPSがIPv6でも80/443へ到達できる場合はAAAAも設定する。証明書を先行取得したCaddyが80/443を使用中の場合は、既存の切り替え手順と証明書volumeを確認してから同じポートを引き継ぐ。
-4. HTTPSの4ページ、`/development`の末尾スラッシュへの転送、`/?code=TEST`、HTTP→HTTPS、スマホとPCのライト・ダーク表示を確認する。HTMLに `no-cache`、存在するハッシュ付きアセットに `immutable` が付くことも確認する。
+4. HTTPSの5ページ（`/privacy/` を含む）、`/development`の末尾スラッシュへの転送、`/?code=TEST`、HTTP→HTTPS、スマホとPCのライト・ダーク表示を確認する。HTMLに `no-cache`、存在するハッシュ付きアセットに `immutable` が付くことも確認する。
 5. `GET /health`に公開サイトのOriginを送ると `Access-Control-Allow-Origin: https://www.nexus-app.jp` が返ることを確認する。未許可originの同じGETと、公開サイトoriginでの他のAPIへのGETにはAllow-Originが付かないことを確認する。最後にブラウザで「応答あり」を確認する。
 
 ## 11. Rollback

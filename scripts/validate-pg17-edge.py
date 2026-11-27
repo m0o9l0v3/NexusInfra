@@ -36,7 +36,7 @@ X-Frame-Options "DENY" -Server
 import headers encode zstd gzip root * /srv/nexus-web/current
 @assets { path /assets/* file }
 header @assets Cache-Control "public, max-age=31536000, immutable"
-@html path / /development/ /status/ /tech/ *.html
+@html path / /development/ /status/ /tech/ /privacy/ *.html
 header @html Cache-Control "no-cache"
 file_server
 }
